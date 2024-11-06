@@ -125,6 +125,20 @@ ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(E
   geom_line() +
   theme_bw()
 
+### Spagetti plot por dia ###
+TasaAprendizaje <- DatosMemoria %>%
+  group_by(Tratamiento,Día) %>%
+  summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
+print(TasaAprendizaje)
+#Grafico
+ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Día), group = Día)) +
+  labs(title = "Tasa de Aprendizaje por Tratamiento",
+       x = "Tratamiento",
+       y = "Tasa de Aprendizaje Promedio") +
+  geom_point() +
+  geom_line() +
+  theme_bw()
+
 
 
 ########### Para el modelo ##############
@@ -149,6 +163,8 @@ plotResiduals(simm1, DatosMemoria$Tratamiento)
 testDispersion(simm1) # dio re lindo el DHARMA
 
 ### prueba de shapiro
+intercept_efectos <- alfai$Nido$(Intercept)
+car::qqPlot(intercept_efectos)
 shapiro.test(intercept_efectos) #no rechazo normalidad
 
 #Veo si el efecto del tratamiento es significativo
@@ -156,18 +172,5 @@ summary(MMixto) #no da sig
 
 #Emmeans para comparar entre tratamientos
 #Posibles graficos para ver tendencias
-
-
-#---------------------------------# Modelo MArginal
-
-
-
-
-
-
-
-
-
-
 
 
