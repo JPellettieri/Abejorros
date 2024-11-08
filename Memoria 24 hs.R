@@ -23,18 +23,18 @@
 #-------------------------------------------------------------#
 #librerías
 # Instalación de paquetes
-install.packages("dplyr")
-install.packages("ggplot2")
-install.packages("car")
-install.packages("glmmTMB")
-install.packages("DHARMa")
-install.packages("performance")
-install.packages("emmeans")
-install.packages("ggeffects")
-install.packages("sjPlot")
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("car")
+#install.packages("glmmTMB")
+#install.packages("DHARMa")
+#install.packages("performance")
+#install.packages("emmeans")
+#install.packages("ggeffects")
+#install.packages("sjPlot")
 
 # Paquete para leer archivos Excel
-install.packages("readxl")
+#install.packages("readxl")
 library(dplyr)
 library(ggplot2)
 library(readxl)
@@ -67,7 +67,7 @@ Datos <- Datos %>%
 
 # Filtrar para los que tomaron al menos 3 veces y sobrevivieron. "Criterio de experto".
 Filt_Cond_Sup_Esp <- Datos %>%
-  filter(Condicionamiento >= 6, Muere == 0)
+  filter(Condicionamiento >= 3, Muere == 0)
 
 #Analisis exploratorio cantidad de tomas y memoria a las 24 hs
 DatosPorCondicionamiento <- DatosMemoria %>%
@@ -214,3 +214,85 @@ ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asym
 
 ## control contra el promedio de los tratamientos . Ponderar por n
 
+
+
+
+
+
+
+
+############ Modelo mixto con Dia como VA ########
+Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
+Datos$Tratamiento<- as.factor(Datos$Tratamiento)
+
+Datos <- Datos %>% # Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
+  rowwise() %>%
+  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
+summary (Datos$Tratamiento) # para ver el N de cada tratamiento
+Datos$Nido<- as.factor(Datos$Nido)
+Datos$Día<- as.factor(Datos$Día)
+
+#filtros
+Filt_Cond_Sup <- Datos %>% #determino cantidad de ingestas
+  filter(Condicionamiento >= 3, Muere == 0)
+
+DatosFiltrados <- Filt_Cond_Sup  %>% # Saco nido 4 y sin olor
+  filter( Tratamiento != "SIN OLOR") #Nido != "4",
+
+DatosFiltrados <- DatosFiltrados %>%  #Defino variable respuesta, Recuerda
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
+
+#MODELO CON DIA COMO VA#
+MMixtoDia<- glmer(Recuerda~Tratamiento+(1|Día), data=DatosFiltrados, family=binomial) 
+
+###### Supuestos ####
+simm1 <- simulateResiduals(fittedMod = MMixtoDia) # , refit = T 
+plot(simm1)
+plotResiduals(simm1,DatosFiltrados$Tratamiento)
+
+testDispersion(simm1) # dio re lindo el DHARMA
+
+### prueba de shapiro
+intercept_efectos <- alfai$Día$'Intercept'
+car::qqPlot(intercept_efectos)
+shapiro.test(intercept_efectos) #no rechazo normalidad
+
+#Veo si el efecto del tratamiento es significativo
+summary(MMixtoDia) #no da sig
+drop1(MMixtoDia)
+Anova(MMixtoDia)
+em_means <- emmeans(MMixtoDia, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts)
+#### grafico de comp.
+em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
+
+ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_point(size = 3) +                      # Puntos para las medias marginales ajustadas
+  geom_errorbar(width = 0.2) +                # Barras de error para los intervalos de confianza
+  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") + # Etiquetas de los ejes
+  theme_minimal()
+
+###### Comparacion a priori con Bonferreoni #####
+#Todo contra el control###
+# Especificar los tratamientos que deseas promediar y el tratamiento de control
+em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response")
+
+tratamientos <- c("ARG", "CAF", "CAF+ARG")  # Reemplaza con tus tratamientos
+control <- "SIN CNA"  # Nombre del tratamiento de control
+
+# Crear un contraste personalizado para comparar el promedio ponderado de los tratamientos con el control
+contraste <- contrast(
+  em_means,
+  method = list(
+    "Promedio vs Control" = c(
+      rep(1 / length(tratamientos), length(tratamientos)),  # Coeficientes para los tratamientos
+      -1  # Coeficiente para el control
+    )
+  ),
+  by = NULL
+)
+
+# Aplicar la corrección de Bonferroni
+summary(contraste, adjust = "bonferroni")
