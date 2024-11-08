@@ -156,11 +156,11 @@ ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(E
 
 ### Spagetti plot por dia ###
 TasaAprendizaje <- DatosMemoria %>%
-  group_by(Tratamiento,Día) %>%
+  group_by(Tratamiento,Dia) %>%
   summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
 print(TasaAprendizaje)
 #Grafico
-ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Día), group = Día)) +
+ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Dia), group = Dia)) +
   labs(title = "Tasa de Aprendizaje por Tratamiento",
        x = "Tratamiento",
        y = "Tasa de Aprendizaje Promedio") +
@@ -230,7 +230,7 @@ Datos <- Datos %>% # Contar el número de veces que los abejorros tomaron la rec
   mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
 summary (Datos$Tratamiento) # para ver el N de cada tratamiento
 Datos$Nido<- as.factor(Datos$Nido)
-Datos$Día<- as.factor(Datos$Día)
+Datos$Dia<- as.factor(Datos$Dia)
 
 #filtros
 Filt_Cond_Sup <- Datos %>% #determino cantidad de ingestas
@@ -244,7 +244,7 @@ DatosFiltrados <- DatosFiltrados %>%  #Defino variable respuesta, Recuerda
   mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
 
 #MODELO CON DIA COMO VA#
-MMixtoDia<- glmer(Recuerda~Tratamiento+(1|Día), data=DatosFiltrados, family=binomial) 
+MMixtoDia<- glmer(Recuerda~Tratamiento+(1|Dia), data=DatosFiltrados, family=binomial) 
 
 ###### Supuestos ####
 simm1 <- simulateResiduals(fittedMod = MMixtoDia) # , refit = T 
@@ -254,7 +254,7 @@ plotResiduals(simm1,DatosFiltrados$Tratamiento)
 testDispersion(simm1) # dio re lindo el DHARMA
 
 ### prueba de shapiro
-intercept_efectos <- alfai$Día$'Intercept'
+intercept_efectos <- alfai$Dia$'Intercept'
 car::qqPlot(intercept_efectos)
 shapiro.test(intercept_efectos) #no rechazo normalidad
 
