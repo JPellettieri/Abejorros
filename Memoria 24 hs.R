@@ -296,3 +296,6 @@ contraste <- contrast(
 
 # Aplicar la corrección de Bonferroni
 summary(contraste, adjust = "bonferroni")
+
+
+#Proximo paso ver que pasa si pongo nido y dia como VA
