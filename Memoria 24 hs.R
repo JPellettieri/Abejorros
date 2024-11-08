@@ -67,8 +67,20 @@ Datos <- Datos %>%
 
 # Filtrar para los que tomaron al menos 3 veces y sobrevivieron. "Criterio de experto".
 Filt_Cond_Sup_Esp <- Datos %>%
-  filter(Condicionamiento >= 3, Muere == 0)
+  filter(Condicionamiento >= 6, Muere == 0)
 
+#Analisis exploratorio cantidad de tomas y memoria a las 24 hs
+DatosPorCondicionamiento <- DatosMemoria %>%
+  group_by(Condicionamiento) %>%
+  summarise(Probabilidad = mean(Recuerda), n = n())
+print(DatosPorCondicionamiento)
+# Graficar la probabilidad
+ggplot(DatosPorCondicionamiento, aes(x = as.factor(Condicionamiento), y = Probabilidad)) +
+  geom_col(fill = "skyblue") +
+  labs(title = "Probabilidad PER a 24hs en función de el la cantidad de ingestas en Condicionamiento",
+       x = "Cantidad de ingestas en Condicionamiento",
+       y = "Probabilidad de PER") +
+  theme_minimal()
 
 
 ############ Analisis exploratorio de datos ##########
@@ -94,6 +106,19 @@ ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje)) +
        y = "Porcentaje (%)") +
   theme_minimal()
 
+
+
+
+#### Filtrado DATOS MEMORIA #######
+#Los datos Sin olor no los vamos a incluir en el modelo asique los borro
+DatosMemoria <- Filt_Cond_Sup_Esp %>%
+  filter(Tratamiento != "SIN OLOR")
+
+#Defino variable respuesta, Recuerda
+DatosMemoria <- DatosMemoria %>%
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
+
 #####HAgo spagetti plot para evaluar los distintos nidos #########
 # Calcular la tasa de aprendizaje promedio por tratamiento
 TasaAprendizaje <- DatosMemoria %>%
@@ -108,6 +133,10 @@ ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(N
   geom_point() +
   geom_line() +
   theme_bw()
+
+#EL NIDO 4 NO  SIGUE LA TENDENCIA, SON POCOS DATOS Y EN FIN DE TEMPORADAS LO SACAMOS
+DatosMemoria <- DatosMemoria %>%
+  filter(Nido != "4")
 
 
 ###### Spagetti plot por estacion #######
@@ -153,24 +182,35 @@ DatosMemoria <- DatosMemoria %>%
 
 ######Planteo modelo Mixto con Nido variable aleatoria #######
 
-MMixto<- glmer(Recuerda~Tratamiento+(1|Nido), data=DatosMemoria, family=binomial) 
+MMixtoNido<- glmer(Recuerda~Tratamiento+(1|Nido), data=DatosMemoria, family=binomial) 
 
 ## Supuestos
-simm1 <- simulateResiduals(fittedMod = MMixto) # , refit = T 
+simm1 <- simulateResiduals(fittedMod = MMixtoNido) # , refit = T 
 plot(simm1)
 plotResiduals(simm1, DatosMemoria$Tratamiento)
 
 testDispersion(simm1) # dio re lindo el DHARMA
 
 ### prueba de shapiro
-intercept_efectos <- alfai$Nido$(Intercept)
-car::qqPlot(intercept_efectos)
-shapiro.test(intercept_efectos) #no rechazo normalidad
+#intercept_efectos <- alfai$Nido$(Intercept)
+#car::qqPlot(intercept_efectos)
+#shapiro.test(intercept_efectos) #no rechazo normalidad
 
 #Veo si el efecto del tratamiento es significativo
-summary(MMixto) #no da sig
+summary(MMixtoNido) #no da sig
+drop1(MMixtoNido)
+Anova(MMixtoNido)
+em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts)
+#### grafico de comp.
+em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
 
-#Emmeans para comparar entre tratamientos
-#Posibles graficos para ver tendencias
+ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_point(size = 3) +                      # Puntos para las medias marginales ajustadas
+  geom_errorbar(width = 0.2) +                # Barras de error para los intervalos de confianza
+  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") + # Etiquetas de los ejes
+  theme_minimal()
 
+## control contra el promedio de los tratamientos . Ponderar por n
 
