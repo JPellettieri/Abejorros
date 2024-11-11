@@ -1,7 +1,7 @@
 ---
-title: 'TP final: Efecto de Cafeina y Arginina en la formación de memoria a largo
-  plazo de abjorros'
-author: "Julieta Pellettieri" #Pongan sus nombres acá
+title: 'TP final: Efecto de Cafeína y Arginina en la formación de memoria a largo
+  plazo de abejorros'
+author: "Julieta Pellettieri, Valentino Morazzo Nunzi" #Pongan sus nombres acá
 date: "11/10/2024"
 output: html_document
 ---
@@ -21,11 +21,10 @@ library(performance)
 library(emmeans)     
 library(ggeffects)   
 library(sjPlot)
-setwd("E:/Juli/Abejorros") #setwd de la compu de Lau
+#setwd("E:/Juli/Abejorros") #setwd de la compu de Lau
+setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
 Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
-Datos$Tratamiento<- as.factor(Datos$Tratamiento)
-Datos$Nido<- as.factor(Datos$Nido)
-summary (Datos$Tratamiento) # para ver el N de cada tratamiento
+
 
 
 
@@ -42,10 +41,14 @@ Bombus Pauloensis es una especie de abejorro nativa de Argentina empleada para l
 El ensayo consistió en un entrenamiento asociativo clásico con 6 exposiciones a Lionanol (un compuesto aromático presente en cientos de flores) seguidas de una recompensa, la misma consistía en solución azucarada 50% p/p a la cual según el tratamiento se le agregaba a la solución cafeína (0,15 mM) (CAF), arginina (0,03 mM) (ARG), ninguno (SIN CNA) o ambos compuestos (CAF+ARG). También se contó con un grupo control el cual fue recompensado 6 veces sin ser expuesto al olor (SIN OLOR). En cada exposición el individuo puede elegir tomar la recompensa o no, solo aquellos individuos que consumieron la recompensa al menos 3 veces fueron considerados entrenados.
 A las 24 hs de realizado el entrenamiento se evaluó la respuesta de los individuos mediante un ensayo PRE (Respuesta de Extensión de Probóscide). El mismo consiste en exponer al abejorro al olor conocido (en este caso Lionanol) y a un olor novedoso (Nonanal) y evaluar en cada exposición si el individuo extiende la probóscide a la espera de la recompensa o no. Solo aquellos individuos que a las 24hs extienden la probóscide en presencia de Lionanol y no en presencia de Nonanal son considerados como que recuerdan el olor enseñado en el entrenamiento, a partir de esta información se definió la variable dicotómica “Recuerda”.
 
-## Condicionamiento de la base de datos
+### Condicionamiento de la base de datos
 
-```{r cars}
-# Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
+```{r BD, echo=TRUE}
+Datos$Tratamiento<- as.factor(Datos$Tratamiento)
+Datos$Nido<- as.factor(Datos$Nido)
+summary (Datos$Tratamiento) # para ver el N de cada tratamiento
+
+#Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
 Datos <- Datos %>% 
   rowwise() %>%
   mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
@@ -62,20 +65,20 @@ Datos <- Datos %>%
 Filt_3 <- Datos %>%
   filter(Condicionamiento >= 3, Muere == 0)
 
+
 ```
 
-### Analisis exploratorio de los datos.
-Es de esperar que una mayor cantidad de ingestas en la etapa de condicionamiento se vea asociada a una mayor probabilidad de formar memorias a largo plazo. Este patron se 
-.... apoya el criterio de experto
+### Análisis exploratorio de los datos.
+Es de esperar que una mayor cantidad de ingestas en la etapa de condicionamiento se vea asociada a una mayor probabilidad de formar memorias a largo plazo. Normalmente se considera que con 3 ingestas el individuo es capaz de formar una asociación estímulo-recompensa. Los datos apoyan el criterio de experto tomado.
 
-```{r pressure, echo=FALSE}
+```{r ingestas, echo=FALSE}
 Ingestas <- Datos %>%
   group_by(Condicionamiento) %>%
   summarise(Probabilidad = mean(Recuerda)*100, n = n())
 print (Ingestas)
 # Graficar la probabilidad
 ggplot(Ingestas, aes(x = as.factor(Condicionamiento), y = Probabilidad)) +
-  geom_col(fill = "skyblue") +
+  geom_col(fill = "orange") +
   labs(title = "Probabilidad de recordar el olor a las 24hs en función de el la cantidad de ingestas en el entrenamiento",
        x = "Cantidad de ingestas",
        y = "Probabilidad de responder al PER (%)") +
@@ -83,27 +86,73 @@ ggplot(Ingestas, aes(x = as.factor(Condicionamiento), y = Probabilidad)) +
 ```
 
 #### Analisis de las variables aleatorias
-```{r pressure, echo=FALSE}
+
+Para evaluar la naturaleza de las variables aleatorias Nido y Día se realizaron sus correspondientes spaguetti plots.
+
+Nido:
+```{r nidos, echo=FALSE}
+#Los datos Sin olor no los vamos a incluir en el modelo asique los borro
+DatosMemoria <- Filt_3 %>%
+  filter(Tratamiento != "SIN OLOR")
 #####HAgo spagetti plot para evaluar los distintos nidos #########
+table (Datos$Nido,Datos$Tratamiento)# n de cada tratamiento para cada nido
 # Calcular la tasa de aprendizaje promedio por tratamiento
 TasaAprendizaje <- DatosMemoria %>%
   group_by(Tratamiento, Nido) %>%
   summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
-print(TasaAprendizaje)
 # Spaghetti-plot de las tasas de aprendizaje por Nido
 ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Nido), group = Nido)) +
-  labs(title = "Tasa Promedio de Aprendizaje por Tratamiento",
+  labs(title = "Tasa Promedio de Aprendizaje por Tratamiento según el nido ",
        x = "Tratamiento",
        y = "Tasa de Aprendizaje Promedio") +
   geom_point() +
   geom_line() +
   theme_bw()
 
-#EL NIDO 4 NO  SIGUE LA TENDENCIA, SON POCOS DATOS Y EN FIN DE TEMPORADAS LO SACAMOS
-DatosMemoria <- DatosMemoria %>%
-  filter(Nido != "4")
-
 ```
 
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+En el gráfico se evidencia que el nido 4 no sigue las tendencias presentadas por los otros nidos. Esto se puede explicar por el período en el cual se tomaron los datos de este nido, ya que el mismo fue evaluado entre el 25/3 y el 17/4. Naturalmente los nidos de abejorro a fines del verano mueren y la reina hiberna hasta el próximo periodo de floración. Por lo tanto es de esperar que en Otoño su actividad se vea alterada y menor a la usual. 
+Si observamos la cantidad de individuos evaluada para cada tratamiento vemos que este nido no solo no se sometió a todos los tratamientos sino también presenta un N=3 mucho menor al resto de los nidos. En este contexto se decidió descartar estos datos.
+
+```{r nido 4, echo=FALSE}
+summary(Datos$Nido) #Cantidad de datos por nido
+Nido4<- DatosMemoria%>%
+  filter(Nido == "4")
+summary(Nido4$Tratamiento)
+#Sacamos al nido 4
+DatosMemoria<- DatosMemoria%>%
+  filter(Nido != "4")
+```
+Día:
+
+
+
+
+#### Analisis exploratorio del porcentaje de respuesta en funcion del tratamiento
+
+```{r VR, echo=FALSE}
+Respuesta <- Filt_3 %>%
+  group_by(Tratamiento) %>%
+  summarise(
+    Responden = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 0),      # Cuenta cuántos tienen LIO 24hs igual a 1
+    Total = n_distinct(N),                 # Reemplaza "N" por el nombre correcto de la columna de ID única
+    Porcentaje = (Responden / Total) * 100, # Calcula el porcentaje de respuesta
+    .groups = "drop"
+  )
+print(Respuesta)
+
+```
+Los datos muestran que los abejorros estudiados que fueron sometidos a recompenzas con concentraciones traza de Arginina y/o cafeina tienen una mayor tasa de respuesta a la evalucion de PER realizada a las 24hs. Tambien se puede destacar un porcentaje de respuesta mayor en los individuos que consumiero ambios compuestos al simultaneo. Por ultimo el control "sin olor" no muestra ningun individuo que responda a la evaluacion PER afirmando que el protocolo aplicado fue adecuado.
+
+
+```{r VRgrafico, echo=FALSE}
+# Graficar las respuestas en porcentaje según el tratamiento
+library(ggplot2)
+ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Porcentaje de Abejorros respondieron a PER en funcion del tratamiento",
+       x = "Tratamiento",
+       y = "Porcentaje (%)") +
+  theme_minimal()
+```
