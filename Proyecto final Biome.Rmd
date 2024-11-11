@@ -1,0 +1,109 @@
+---
+title: 'TP final: Efecto de Cafeina y Arginina en la formación de memoria a largo
+  plazo de abjorros'
+author: "Julieta Pellettieri" #Pongan sus nombres acá
+date: "11/10/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(lme4)
+library(ggplot2)     
+library(dplyr)      
+library(car)        
+library(glmmTMB)     
+library(DHARMa)      
+library(performance) 
+library(emmeans)     
+library(ggeffects)   
+library(sjPlot)
+setwd("E:/Juli/Abejorros") #setwd de la compu de Lau
+Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
+Datos$Tratamiento<- as.factor(Datos$Tratamiento)
+Datos$Nido<- as.factor(Datos$Nido)
+summary (Datos$Tratamiento) # para ver el N de cada tratamiento
+
+
+
+```
+
+## Introducción:
+
+En la actualidad el incremento en la producción agropecuaria mediante prácticas sustentables se volvió una prioridad. La polinización dirigida es una estrategia en desarrollo que consiste en condicionar polinizadores como abejas y abejorros para aumentar la producción de frutales. La mayoría de los estudios para perfeccionar esta técnica se llevaron a cabo en Apis Mellifera por ser una especie accesible, de uso generalizado y con un alto grado de domesticación. En los mismos se encontraron que compuestos presentes naturalmente en concentraciones trazas en el néctar de las plantas como la cafeína y la Arginina favorecen la formación de memorias a largo término.
+Bombus Pauloensis es una especie de abejorro nativa de Argentina empleada para la polinización dirigida. Sin embargo, debido a su alto costo, difícil manejo e inaccesibilidad es  una especie poco estudiada. Con el objetivo de mejorar la performance de esta especie en las prácticas de polinización dirigida se busca evaluar el impacto de la cafeína y la arginina en la formación de memoria a largo término. 
+
+
+## Descripción del ensayo:
+ En este contexto a lo largo del año 2024 se realizó un ensayo experimental en el Campo Experimental de la Facultad de Ciencias Exactas y Naturales de la Universidad de Buenos Aires, Argentina. El cual involucró en el uso de 6 nidos industriales de los cuales solo 4 fueron posibles evaluar debido al difícil manejo de la especie. Cada nido fue evaluado durante el periodo que duró activo, luego se continuaron los ensayos con el nido siguiente por lo tanto en cada día de ensayo salvo los días de transición entre nidos suele evaluarse individuos perteneciente al mismo nido. 
+El ensayo consistió en un entrenamiento asociativo clásico con 6 exposiciones a Lionanol (un compuesto aromático presente en cientos de flores) seguidas de una recompensa, la misma consistía en solución azucarada 50% p/p a la cual según el tratamiento se le agregaba a la solución cafeína (0,15 mM) (CAF), arginina (0,03 mM) (ARG), ninguno (SIN CNA) o ambos compuestos (CAF+ARG). También se contó con un grupo control el cual fue recompensado 6 veces sin ser expuesto al olor (SIN OLOR). En cada exposición el individuo puede elegir tomar la recompensa o no, solo aquellos individuos que consumieron la recompensa al menos 3 veces fueron considerados entrenados.
+A las 24 hs de realizado el entrenamiento se evaluó la respuesta de los individuos mediante un ensayo PRE (Respuesta de Extensión de Probóscide). El mismo consiste en exponer al abejorro al olor conocido (en este caso Lionanol) y a un olor novedoso (Nonanal) y evaluar en cada exposición si el individuo extiende la probóscide a la espera de la recompensa o no. Solo aquellos individuos que a las 24hs extienden la probóscide en presencia de Lionanol y no en presencia de Nonanal son considerados como que recuerdan el olor enseñado en el entrenamiento, a partir de esta información se definió la variable dicotómica “Recuerda”.
+
+## Condicionamiento de la base de datos
+
+```{r cars}
+# Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
+Datos <- Datos %>% 
+  rowwise() %>%
+  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
+
+#Defino variable respuesta, Recuerda
+Datos <- Datos %>%
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
+
+Datos <- Datos %>%
+  filter(Condicionamiento > 0, Muere == 0)
+
+# Filtrar para los que tomaron al menos 3 veces y sobrevivieron. "Criterio de experto".
+Filt_3 <- Datos %>%
+  filter(Condicionamiento >= 3, Muere == 0)
+
+```
+
+### Analisis exploratorio de los datos.
+Es de esperar que una mayor cantidad de ingestas en la etapa de condicionamiento se vea asociada a una mayor probabilidad de formar memorias a largo plazo. Este patron se 
+.... apoya el criterio de experto
+
+```{r pressure, echo=FALSE}
+Ingestas <- Datos %>%
+  group_by(Condicionamiento) %>%
+  summarise(Probabilidad = mean(Recuerda)*100, n = n())
+print (Ingestas)
+# Graficar la probabilidad
+ggplot(Ingestas, aes(x = as.factor(Condicionamiento), y = Probabilidad)) +
+  geom_col(fill = "skyblue") +
+  labs(title = "Probabilidad de recordar el olor a las 24hs en función de el la cantidad de ingestas en el entrenamiento",
+       x = "Cantidad de ingestas",
+       y = "Probabilidad de responder al PER (%)") +
+  theme_minimal()  #corregir para que tomas=2 tambien lo grafique
+```
+
+#### Analisis de las variables aleatorias
+```{r pressure, echo=FALSE}
+#####HAgo spagetti plot para evaluar los distintos nidos #########
+# Calcular la tasa de aprendizaje promedio por tratamiento
+TasaAprendizaje <- DatosMemoria %>%
+  group_by(Tratamiento, Nido) %>%
+  summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
+print(TasaAprendizaje)
+# Spaghetti-plot de las tasas de aprendizaje por Nido
+ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Nido), group = Nido)) +
+  labs(title = "Tasa Promedio de Aprendizaje por Tratamiento",
+       x = "Tratamiento",
+       y = "Tasa de Aprendizaje Promedio") +
+  geom_point() +
+  geom_line() +
+  theme_bw()
+
+#EL NIDO 4 NO  SIGUE LA TENDENCIA, SON POCOS DATOS Y EN FIN DE TEMPORADAS LO SACAMOS
+DatosMemoria <- DatosMemoria %>%
+  filter(Nido != "4")
+
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
