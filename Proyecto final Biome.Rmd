@@ -125,8 +125,24 @@ DatosMemoria<- DatosMemoria%>%
   filter(Nido != "4")
 ```
 Día:
+Se consideró usar día como variable de efectos aleatorios pero al no realizarse de manera ordenada todos los tratameitnos por dia y el uso de un solo nido por día dificultan su uso como VA.
 
+```{r Día, echo=FALSE}
+### Spagetti plot por dia ###
+TasaAprendizaje <- DatosMemoria %>%
+  group_by(Tratamiento,Dia) %>%
+  summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
+print(TasaAprendizaje)
+#Grafico
+ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Dia), group = Dia)) +
+  labs(title = "Tasa de Aprendizaje por Tratamiento",
+       x = "Tratamiento",
+       y = "Tasa de Aprendizaje Promedio") +
+  geom_point() +
+  geom_line() +
+  theme_bw()
 
+```
 
 
 #### Analisis exploratorio del porcentaje de respuesta en funcion del tratamiento
@@ -143,7 +159,7 @@ Respuesta <- Filt_3 %>%
 print(Respuesta)
 
 ```
-Los datos muestran que los abejorros estudiados que fueron sometidos a recompenzas con concentraciones traza de Arginina y/o cafeina tienen una mayor tasa de respuesta a la evalucion de PER realizada a las 24hs. Tambien se puede destacar un porcentaje de respuesta mayor en los individuos que consumiero ambios compuestos al simultaneo. Por ultimo el control "sin olor" no muestra ningun individuo que responda a la evaluacion PER afirmando que el protocolo aplicado fue adecuado.
+Los datos muestran que los abejorros estudiados que fueron sometidos a recompensas con concentraciones traza de Arginina y/o cafeina tienen una mayor tasa de respuesta a la evalucion de PER realizada a las 24hs. Tambien se puede destacar un porcentaje de respuesta mayor en los individuos que consumiero ambos compuestos al simultaneo. Por ultimo el control "sin olor" no muestra ningun individuo que responda a la evaluacion PER afirmando que el protocolo aplicado fue adecuado.
 
 
 ```{r VRgrafico, echo=FALSE}
@@ -155,4 +171,24 @@ ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje)) +
        x = "Tratamiento",
        y = "Porcentaje (%)") +
   theme_minimal()
+```
+
+
+### Modelo
+Se plantea un modelo de comparación de medias con:
+  - Tratamiento como variable de efectos fijos cualitativa con 4 niveles (CAF, ARG, CAF+ARG y SIN CNA)
+  - Nido como variable cualitativa de efectos aleatorio con tres niveles (2,5 y 6) 
+  - Respuesta al PER como variable respuesta dicotomica (1= extencion de proboscide solo a Lionanol, 0= no extencion al Lionanol o extension a Lionanol y al Nonanal) 
+  Se espera que la VR ajuste a distibucion de tipo Bernoulli.
+```{r Modelo mixto VA nido, echo=TRUE}
+MMixtoNido<- glmer(Recuerda~Tratamiento+(1|Nido), data=DatosMemoria, family=binomial)
+```
+
+#### Supuestos
+-> poner aca cuales son los supuestos del modelo
+Se pusieron a prueba los supuestos del modelo empleando el paquete DHARMA
+```{Supuestos, echo=FALSE}
+simm1 <- simulateResiduals(fittedMod = MMixtoNido)
+plot(simm1)
+testDispersion(simm1)
 ```
