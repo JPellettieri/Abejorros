@@ -37,7 +37,7 @@ Bombus Pauloensis es una especie de abejorro nativa de Argentina empleada para l
 
 
 ## Descripción del ensayo:
- En este contexto a lo largo del año 2024 se realizó un ensayo experimental en el Campo Experimental de la Facultad de Ciencias Exactas y Naturales de la Universidad de Buenos Aires, Argentina. El cual involucró en el uso de 6 nidos industriales de los cuales solo 4 fueron posibles evaluar debido al difícil manejo de la especie. Cada nido fue evaluado durante el periodo que duró activo, luego se continuaron los ensayos con el nido siguiente por lo tanto en cada día de ensayo salvo los días de transición entre nidos suele evaluarse individuos perteneciente al mismo nido. 
+ En este contexto a lo largo del año 2024 se realizó un ensayo experimental en el Campo Experimental de la Facultad de Ciencias Exactas y Naturales de la Universidad de Buenos Aires, Argentina. El cual involucró en el uso de 6 nidos industriales de los cuales solo 4 fueron posibles evaluar debido al difícil manejo de la especie. Cada nido fue evaluado durante el periodo que duró activo, luego se continuaron los ensayos con el nido siguiente por lo tanto en cada día de ensayo, salvo los días de transición entre nidos, se emplean individuos perteneciente al mismo nido. 
 El ensayo consistió en un entrenamiento asociativo clásico con 6 exposiciones a Lionanol (un compuesto aromático presente en cientos de flores) seguidas de una recompensa, la misma consistía en solución azucarada 50% p/p a la cual según el tratamiento se le agregaba a la solución cafeína (0,15 mM) (CAF), arginina (0,03 mM) (ARG), ninguno (SIN CNA) o ambos compuestos (CAF+ARG). También se contó con un grupo control el cual fue recompensado 6 veces sin ser expuesto al olor (SIN OLOR). En cada exposición el individuo puede elegir tomar la recompensa o no, solo aquellos individuos que consumieron la recompensa al menos 3 veces fueron considerados entrenados.
 A las 24 hs de realizado el entrenamiento se evaluó la respuesta de los individuos mediante un ensayo PRE (Respuesta de Extensión de Probóscide). El mismo consiste en exponer al abejorro al olor conocido (en este caso Lionanol) y a un olor novedoso (Nonanal) y evaluar en cada exposición si el individuo extiende la probóscide a la espera de la recompensa o no. Solo aquellos individuos que a las 24hs extienden la probóscide en presencia de Lionanol y no en presencia de Nonanal son considerados como que recuerdan el olor enseñado en el entrenamiento, a partir de esta información se definió la variable dicotómica “Recuerda”.
 
@@ -63,13 +63,13 @@ Datos <- Datos %>%
 
 # Filtrar para los que tomaron al menos 3 veces y sobrevivieron. "Criterio de experto".
 Filt_3 <- Datos %>%
-  filter(Condicionamiento >= 3, Muere == 0)
+  filter(Condicionamiento >=3, Muere == 0)
 
 
 ```
 
 ### Análisis exploratorio de los datos.
-Es de esperar que una mayor cantidad de ingestas en la etapa de condicionamiento se vea asociada a una mayor probabilidad de formar memorias a largo plazo. Normalmente se considera que con 3 ingestas el individuo es capaz de formar una asociación estímulo-recompensa. Los datos apoyan el criterio de experto tomado.
+Es de esperar que una mayor cantidad de ingestas en la etapa de condicionamiento se vea asociada a una mayor probabilidad de formar memorias a largo plazo. Normalmente se considera que con 3 ingestas el individuo es capaz de formar una asociación estímulo-recompensa. 
 
 ```{r ingestas, echo=FALSE}
 Ingestas <- Datos %>%
@@ -79,15 +79,22 @@ print (Ingestas)
 # Graficar la probabilidad
 ggplot(Ingestas, aes(x = as.factor(Condicionamiento), y = Probabilidad)) +
   geom_col(fill = "orange") +
-  labs(title = "Probabilidad de recordar el olor a las 24hs en función de el la cantidad de ingestas en el entrenamiento",
+  labs(title = "Probabilidad de recordar el olor a las 24hs en función de la cantidad de ingestas en el entrenamiento",
        x = "Cantidad de ingestas",
        y = "Probabilidad de responder al PER (%)") +
-  theme_minimal()  #corregir para que tomas=2 tambien lo grafique
+  theme_minimal()  #corregir para que tomas=2 también lo grafique
 ```
 
-#### Analisis de las variables aleatorias
+Los datos apoyan el criterio de experto tomado. Ademas se evidencian 3 posibles casos segun la cantidad de ingestas:
+  1. Cuando el individuo no toma la recompensa o la toma 1 o 2 veces, no hay registro de respuesta al PER a las 24 hs.
+  2. Cuando el individuo toma entre 3 y 4 veces, aproximadamente el ....% de los abejorros respondieron al PER a las 24 hs. 
+  3. Cuando el individuo toma mas de 4 veces, el ..% de los abejorros respondieron al per a las 24 hs. 
+  
+  En función de estos resultados se consideró incluir la variable cualitativa cantidad de ingestas (Baja y Alta) al modelo como variable de efectos fijos. Donde Baja incluye a los individuos que tomaron 3 o 4 veces la recompensa y Alta a los individuos que tomaron 5 o 6 veces la recompensa. 
+  
+#### Análisis de las variables aleatorias
 
-Para evaluar la naturaleza de las variables aleatorias Nido y Día se realizaron sus correspondientes spaguetti plots.
+Para evaluar la naturaleza de las variables aleatorias Nido y Día se realizaron sus correspondientes gráficos de perfiles.
 
 Nido:
 ```{r nidos, echo=FALSE}
@@ -125,10 +132,10 @@ DatosMemoria<- DatosMemoria%>%
   filter(Nido != "4")
 ```
 Día:
-Se consideró usar día como variable de efectos aleatorios pero al no realizarse de manera ordenada todos los tratameitnos por dia y el uso de un solo nido por día dificultan su uso como VA.
+Se consideró usar día como variable de efectos aleatorios pero al no realizarse de manera ordenada todos los tratamientos por día y el uso de un solo nido por día dificultan su uso como VA.
 
 ```{r Día, echo=FALSE}
-### Spagetti plot por dia ###
+### Spaghetti plot por dia ###
 TasaAprendizaje <- DatosMemoria %>%
   group_by(Tratamiento,Dia) %>%
   summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
@@ -145,7 +152,7 @@ ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(D
 ```
 
 
-#### Analisis exploratorio del porcentaje de respuesta en funcion del tratamiento
+#### Análisis exploratorio del porcentaje de respuesta en función del tratamiento
 
 ```{r VR, echo=FALSE}
 Respuesta <- Filt_3 %>%
@@ -159,7 +166,7 @@ Respuesta <- Filt_3 %>%
 print(Respuesta)
 
 ```
-Los datos muestran que los abejorros estudiados que fueron sometidos a recompensas con concentraciones traza de Arginina y/o cafeina tienen una mayor tasa de respuesta a la evalucion de PER realizada a las 24hs. Tambien se puede destacar un porcentaje de respuesta mayor en los individuos que consumiero ambos compuestos al simultaneo. Por ultimo el control "sin olor" no muestra ningun individuo que responda a la evaluacion PER afirmando que el protocolo aplicado fue adecuado.
+Los datos muestran que los abejorros estudiados que fueron sometidos a recompensas con concentraciones traza de Arginina y/o cafeína tienen una mayor tasa de respuesta a la evaluación de PER realizada a las 24hs. También se puede destacar un porcentaje de respuesta mayor en los individuos que consumieron ambos compuestos al simultáneo. Por último el control "sin olor" no muestra ningún individuo que responda a la evaluación PER afirmando que el protocolo aplicado fue adecuado.
 
 
 ```{r VRgrafico, echo=FALSE}
@@ -167,7 +174,7 @@ Los datos muestran que los abejorros estudiados que fueron sometidos a recompens
 library(ggplot2)
 ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje)) +
   geom_bar(stat = "identity") +
-  labs(title = "Porcentaje de Abejorros respondieron a PER en funcion del tratamiento",
+  labs(title = "Porcentaje de Abejorros respondieron a PER en función del tratamiento",
        x = "Tratamiento",
        y = "Porcentaje (%)") +
   theme_minimal()
@@ -175,20 +182,110 @@ ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje)) +
 
 
 ### Modelo
-Se plantea un modelo de comparación de medias con:
+
+Se plantea un modelo lineal generalizado mixto de comparación de medias con:
   - Tratamiento como variable de efectos fijos cualitativa con 4 niveles (CAF, ARG, CAF+ARG y SIN CNA)
+  - Cantidad de ingestas como variable de efectos fijos cualitativa con dos niveles (Alta y Baja)
   - Nido como variable cualitativa de efectos aleatorio con tres niveles (2,5 y 6) 
-  - Respuesta al PER como variable respuesta dicotomica (1= extencion de proboscide solo a Lionanol, 0= no extencion al Lionanol o extension a Lionanol y al Nonanal) 
-  Se espera que la VR ajuste a distibucion de tipo Bernoulli.
-```{r Modelo mixto VA nido, echo=TRUE}
-MMixtoNido<- glmer(Recuerda~Tratamiento+(1|Nido), data=DatosMemoria, family=binomial)
+  - Respuesta al PER como variable respuesta dicotómica (1= extensión de probóscide solo a Lionanol, 0= no extensión al Lionanol o extensión a Lionanol y al Nonanal) 
+  Se espera que la VR ajuste a distribución de tipo Bernoulli.
+```{r Modelo ingestas, echo=FALSE}  
+  DatosMemoria2 <- DatosMemoria
+#Defino variable Condicionamiento2 #######
+DatosMemoria <- DatosMemoria %>%
+  rowwise() %>%
+  mutate( Condicionamiento2 = if_else(Condicionamiento < 5, "Bajo", "Alto"),)
+
+MMixto2<- glmer(Recuerda~Tratamiento+Condicionamiento2+(1|Nido), data=DatosMemoria, family=binomial)
+
 ```
+
+
+
 
 #### Supuestos
 -> poner aca cuales son los supuestos del modelo
+
 Se pusieron a prueba los supuestos del modelo empleando el paquete DHARMA
-```{Supuestos, echo=FALSE}
-simm1 <- simulateResiduals(fittedMod = MMixtoNido)
-plot(simm1)
-testDispersion(simm1)
+```{r Supuestos, echo=FALSE}
+#Supuestos
+simm2 <- simulateResiduals(fittedMod = MMixto2)
+plot(simm2)
+testDispersion(simm2)
 ```
+Dado que ningún supuesto fue rechazado se realizó un Test global Anova. Y se evaluó mediante AIC si la cantidad de ingestas durante el condicionamiento amertitaba la compejizacion del modelo.
+```{r AIC, echo=FALSE}
+MMixtoNido<- glmer(Recuerda~Tratamiento+(1|Nido), data=DatosMemoria, family=binomial)
+
+AIC (MMixto2, MMixtoNido)
+
+```
+
+
+Nos quedamos con el modelo sin la varible cantidad de ingestas
+```{r Modelo mixto VA nido, echo=FALSE}
+summary(MMixtoNido) 
+Anova(MMixtoNido)
+
+```
+
+
+También se estimó la tasa de respuesta media esperada por los individuos bajo cada tratamiento.
+
+```{r Emmeans, echo=FALSE}
+em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts)
+#### gráfico de comp.
+em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
+
+ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_point(size = 3) +                      # Puntos para las medias marginales ajustadas
+  geom_errorbar(width = 0.2) +                # Barras de error para los intervalos de confianza
+  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") + # Etiquetas de los ejes
+  theme_minimal()
+
+```
+
+
+Se realizo un contraste de Bonferreoni ...........
+```{r Bonferreoni, echo=FALSE}
+tratamientos <- c("ARG", "CAF", "CAF+ARG")  # Reemplaza con tus tratamientos
+control <- "SIN CNA"  # Nombre del tratamiento de control
+
+# Crear un contraste personalizado para comparar el promedio ponderado de los tratamientos con el control
+contraste <- contrast(
+  em_means,
+  method = list(
+    "Promedio vs Control" = c(
+      rep(1 / length(tratamientos), length(tratamientos)),  # Coeficientes para los tratamientos
+      -1  # Coeficiente para el control
+    )
+  ),
+  by = NULL
+)
+
+# Aplicar la corrección de Bonferroni
+summary(contraste, adjust = "bonferroni")
+
+```
+
+El contraste de Bonferreoni entre los abejorros sin CNA y con dio significativo ... # interpretar el odds.ratio en el contexto del problema.
+
+
+## Discusión y Conclusiones
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
