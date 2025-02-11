@@ -1,569 +1,211 @@
----
-title: 'TP final: Efecto de Cafeína y Arginina en la formación de memoria a largo
-  plazo de abejorros'
-author: "Pellettieri Julieta, Morazzo Nunzi Valentino, Lachavanne Moira, Bollini Guillermina y Maldonado Lucio" #Pongan sus nombres acá
-date: "15/10/2024"
-output:
-  html_document: default
-  pdf_document: default
----
+install.packages("data.table")
+library(data.table)
+# Definir la ruta al archivo
+archivo <- "E:/Juli/ENFR 2018 - Base usuario.txt" 
+# Cargar el archivo con el separador '|'
+ENFR <- fread(archivo, sep = "|", stringsAsFactors = FALSE)
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Ver las primeras filas para asegurarte de que se haya cargado correctamente
+head(ENFR)
+
+#hago una nueva tabla con las variables de interes
+
+"quintil_uc" #quintil de ingresos
+
+#para saber si hay menores hago total de miembros menos miembros mayores de edad
+"cant_componentes" - "miembros_18"
+ENFR$cant_menores18 <- ENFR$cant_componentes - ENFR$miembros_18
+#Durante los últimos 30 días, ¿notó que alguien fumó en dentro de su casa?
+"bita10_01"
+
+#¿Qué edad tenía cuando fumó por primera vez? 
+"bita02"
+
+#Actualmente ¿fuma usted cigarrillos… 1 ...todos los días? 2 ...algunos días? 3 ...no fuma?
+"bita04"
+
+#Nivel de intruccion del jefe de hogar
+# 1 Hasta primario incompleto
+# 2 Primario completo y secundario incompleto
+# 3 Secundario completo y más
+# 4 Educación especial
+
+"nivel_instruccion_agrupado_j"
+
+
+
+Tabaco <- ENFR[, c("id","quintil_uc", "cant_componentes", "miembros_18","cant_menores18", "bita10_01", "bita02", "bita04", "nivel_instruccion_agrupado_j")]
+# Renombro columnas
+colnames(Tabaco)[colnames(Tabaco) %in% c("quintil_uc", "cant_componentes", "miembros_18","cant_menores18", "bita10_01", "bita02", "bita04", "nivel_instruccion_agrupado_j")] <- c("quintil_ing", "integrantes", "mayores18","menores18", "humo_hogar", "edad_primera", "fuma", "instruccion")
+Tabaco$quintil_ing<-as.factor(Tabaco$quintil_ing)
+Tabaco$instruccion<-as.factor(Tabaco$instruccion)
+# Verificamos las primeras filas del nuevo dataset
+head(Tabaco)
+
+# Opcional: Guardar el nuevo dataset como un archivo CSV
+#write.csv(Tabaco, "Tabaco.csv", row.names = FALSE)
+
+
+##### Filtrado de datos #####
+Tabaco <- subset(Tabaco, instruccion != 4) #saco educacion especial
+Tabaco <- subset(Tabaco, humo_hogar != 98) #saco casos en los que el entrevistado no estuvo en su hogar los ultimos 30 dias
+
+########## Exploratorio #######
+
+#CUANTOS DE LOS ENTREVISTADOS FUMAN?
+Tabaco$fuma_o_no <- ifelse(Tabaco$fuma %in% c(1, 2), "Fuma", "No Fuma")
 library(dplyr)
-library(ggplot2)
-library(readxl)
-library(lme4)
-library(ggplot2)     
-library(dplyr)      
-library(car)        
-library(glmmTMB)     
-library(DHARMa)      
-library(performance) 
-library(emmeans)     
-library(ggeffects)   
-library(sjPlot)
-#setwd("E:/Juli/Abejorros") #setwd de la compu de Lau
-setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
-Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
-
-
-
-
-```
-
-## Introducción:
-
-En la actualidad el incremento en la producción agropecuaria mediante
-prácticas sustentables se volvió una prioridad. La polinización dirigida
-es una estrategia en desarrollo que consiste en condicionar
-polinizadores como abejas y abejorros para aumentar la producción de
-frutales. La mayoría de los estudios para perfeccionar esta técnica se
-llevaron a cabo en Apis Mellifera por ser una especie accesible, de uso
-generalizado y con un alto grado de domesticación. En los mismos se
-encontraron que compuestos presentes naturalmente en concentraciones
-trazas en el néctar de las plantas como la cafeína y la arginina
-favorecen la formación de memoria a largo término. Bombus Pauloensis es
-una especie de abejorro nativa de Argentina empleada para la
-polinización dirigida. Sin embargo, debido a su alto costo, difícil
-manejo e inaccesibilidad es una especie poco estudiada. Con el objetivo
-de mejorar la performance de esta especie en las prácticas de
-polinización dirigida se busca evaluar el impacto de la cafeína y la
-arginina en la formación de memoria a largo término.
-
-## Objetivo:
-
-Evaluar si el consumo de cafeína y/o arginina influye en la persistencia
-de la memoria a largo plazo. \## Hipótesis: Tanto el tratamiento con
-cafeína como con arginina, así como la combinación de ambos, tienen un
-efecto positivo en la memoria a largo término. El tratamiento combinado
-con cafeína y arginina genera un efecto mayor en la memoria a largo
-plazo en comparación con el tratamiento de cada compuesto de manera
-individual.
-
-## Descripción del ensayo:
-
-En este contexto, a lo largo del año 2024 se llevó a cabo un ensayo
-experimental en el Campo Experimental de la Facultad de Ciencias Exactas
-y Naturales de la Universidad de Buenos Aires, Argentina, el cual
-involucró el uso de seis nidos industriales, de los cuales solo fue
-posible evaluar cuatro debido al manejo complejo de la especie. Cada
-nido fue evaluado durante el período en que estuvo activo, y luego se
-continuaron los ensayos con el siguiente nido. Por lo tanto, en cada día
-de ensayo, salvo en los días de transición entre nidos, se evaluaron
-individuos pertenecientes al mismo nido.
-
-El ensayo consistió en un entrenamiento asociativo clásico, con seis
-exposiciones a Lionanol, un compuesto aromático presente en cientos de
-flores, seguido de una recompensa. Esta consistía en una solución
-azucarada al 50% p/p, a la cual se le añadía, según el tratamiento,
-cafeína (0,15 mM) (CAF), arginina (0,03 mM) (ARG), ninguno de estos
-compuestos (SIN CNA), o ambos (CAF+ARG). También se incluyó un grupo
-control, el cual fue recompensado seis veces sin ser expuesto al olor
-(SIN OLOR). En cada exposición, el individuo podía elegir tomar la
-recompensa o no; solo aquellos individuos que consumieron la recompensa
-al menos tres veces fueron considerados entrenados.
-
-A las 24 hs de realizado el entrenamiento se evaluó la respuesta de los
-individuos mediante un ensayo PER (Respuesta de Extensión de
-Probóscide). El mismo consiste en exponer al abejorro al olor conocido
-(en este caso Lionanol) y a un olor novedoso (Nonanal) y evaluar en cada
-exposición si el individuo extiende la probóscide a la espera de la
-recompensa o no. Solo aquellos individuos que a las 24hs extienden la
-probóscide en presencia de Lionanol y no en presencia de Nonanal son
-considerados como que recuerdan el olor enseñado en el entrenamiento, a
-partir de esta información se definió la variable dicotómica “Recuerda”.
-
-Tabla 1: Cantidad de abejorros evaluados bajo cada tratamiento en el
-período estudiado.
-
-```{r BD, echo=FALSE}
-Datos$Tratamiento<-as.factor(Datos$Tratamiento)
-Datos$Nido<- as.factor(Datos$Nido)
-summary (Datos$Tratamiento) # para ver el N de cada tratamiento
-
-#Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
-Datos <- Datos %>% 
-  rowwise() %>%
-  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
-
-#Defino variable respuesta, Recuerda
-Datos <- Datos %>%
-  rowwise() %>%
-  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
-
-Datos <- Datos %>%
-  filter(Condicionamiento > 0, Muere == 0)
-
-# Filtrar para los que tomaron al menos 3 veces y sobrevivieron. "Criterio de experto".
-Filt_3 <- Datos %>%
-  filter(Condicionamiento >=3, Muere == 0)
-
-
-```
-
-## Análisis exploratorio de los datos.
-
-##### Cantidad de ingestas
-
-Una mayor cantidad de ingestas durante la etapa de entrenamiento se
-asocia con una mayor probabilidad de formar memorias a largo plazo.
-Generalmente, se considera que con al menos tres ingestas, el individuo
-es capaz de formar una asociación entre el estímulo y la recompensa y
-generar una memoria a largo término (24 horas). Ni la cafeína ni la
-arginina, interfieren en la cantidad de veces que el abejorro toma la
-recompensa.
-
-```{r ingestasTratamiento, echo=FALSE}
-DatosMemoria <- Filt_3 %>%
-  filter(Tratamiento != "SIN OLOR", Nido!="4")
-Respuesta_general <- DatosMemoria %>%
-  group_by(Tratamiento,Condicionamiento) %>%
-  summarise(
-	Responden = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 0),  	# Cuenta cuántos tienen LIO 24hs igual a 1
-	Total = n_distinct(N),             	# Reemplaza "N" por el nombre correcto de la columna de ID única
-	Porcentaje = (Responden / Total), # Calcula el porcentaje de respuesta
-	.groups = "drop")
-###Gráfico de % Resp vs canti de ingestas, discriminando por tratamiento
-ggplot(Respuesta_general, aes(as.numeric(Condicionamiento), Porcentaje, colour = Tratamiento)) +
-  geom_point() + 
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) + 
-  labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
-       x = "Cantidad de ingestas",
-       y = "Porcentaje de respuesta al PER 24hs") +
-  scale_color_manual(values = c("SIN CNA" = "#FFD966",
-                                "CAF" = "#E69138",
-                                "ARG" = "#8E7CC3",
-                                "CAF+ARG" = "#C27BA0")) +
-  theme(text = element_text(size = 14))
-```
-
-*Figura 1: Porcentaje de respuesta al PER a las 24hs en función de la
-cantidad de ingesta y discriminando por tratamiento.*
-
-```{r ingestas, echo=FALSE}
-summary(DatosMemoria[,4:5])
-with(DatosMemoria,table(Tratamiento, Condicionamiento))
-```
-
-*Tabla 2: Cantidad de individuos que se sometieron a cada tratamiento y
-que ingirieron distintas veces la recompensa en el entrenamiento.*
-
-```{r ingestas2, echo=FALSE}
-Ingestas <- Datos %>%
-  group_by(Condicionamiento) %>%
-  summarise(Probabilidad = mean(Recuerda)*100, n = n())
-print (Ingestas)
-```
-
-*Tabla 3: Porcentaje que respondió al olor condicionado y no al
-incondicionado (respuesta al PER) durante la evaluación en función de la
-cantidad de ingestas durante el entrenamiento y número de abejorros para
-cada uno de estos grupos*
-
-```{r ingestasplot, echo=FALSE}
-# Graficar la probabilidad
-ggplot(Ingestas, aes(x = as.factor(Condicionamiento), y = Probabilidad)) +
-  geom_col(fill = "orange") +
-  labs(title = "Probabilidad de recordar el olor a las 24hs en función\n de la cantidad de ingestas en el entrenamiento.",
-       x = "Cantidad de ingestas",
-       y = "Probabilidad de responder al PER (%)") +
-  theme_minimal()  #corregir para que tomas=2 también lo grafique
-```
-
-*Figura 2: Porcentaje que respondió al PER en función de la cantidad de
-ingestas durante el entrenamiento.*
-
-Los datos apoyan el criterio de experto tomado. Además se evidencian 3
-posibles casos según la cantidad de ingestas: 1. Cuando el individuo no
-toma la recompensa o la toma 1 o 2 veces, no hay registro de respuesta
-al PER a las 24 hs. 2. Cuando el individuo toma entre 3 y 4 veces,
-aproximadamente el 25% de los abejorros respondieron al PER a las 24 hs.
-3. Cuando el individuo toma más de 4 veces, el 42% de los abejorros
-respondieron al per a las 24 hs.
-
-En función de estos resultados se decidió incluir el número de ingestas
-como variable cualitativa “Cantidad de ingestas (Baja y Alta)” al modelo
-como variable de efectos fijos. Donde Baja incluye a los individuos que
-tomaron 3 o 4 veces la recompensa y Alta a los individuos que tomaron 5
-o 6 veces la recompensa.
-
-##### Tratamiento
-
-Se continuó con el análisis exploratorio del efecto del tratamiento en
-la retención de la memoria. Por la variabilidad experimental en el
-número de ingestas durante el entrenamiento y la utilización de
-individuos con al menos tres ingestas los distintos grupos resultaron no
-estar balanceados (Anexo 1).
-
-```{r VR, echo=FALSE}
-Respuesta <- Filt_3 %>%
-  group_by(Tratamiento) %>%
-  summarise(
-    Responden = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 0),      # Cuenta cuántos tienen LIO 24hs igual a 1
-    Total = n_distinct(N),                 # Reemplaza "N" por el nombre correcto de la columna de ID única
-    Porcentaje = (Responden / Total) * 100, # Calcula el porcentaje de respuesta
-    .groups = "drop"
-  )
-A1<-Respuesta
-# Graficar las respuestas en porcentaje según el tratamiento
-library(ggplot2)
-ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje, fill = Tratamiento)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Porcentaje de Abejorros respondieron a PER en\n función del tratamiento",
-       x = "Tratamiento",
-       y = "Porcentaje (%)") +
-  scale_fill_manual(values = c("SIN OLOR" = "#76A5Af",
-                               "SIN CNA" = "#FFD966",
-                               "CAF" = "#E69138",
-                               "ARG" = "#8E7CC3",
-                               "CAF+ARG" = "#C27BA0")) +
-  theme_minimal()
-```
-
-*Figura 3: Porcentaje de abejorros que respondieron a PER en función del
-tratamiento.*
-
-El gráfico muestra el porcentaje de abejorros que respondieron a la
-prueba de respuesta (PER) en función de los diferentes tratamientos
-(Fig. 4). En general, los tratamientos con arginina (ARG), cafeína (CAF)
-y la combinación de ambos (CAF+ARG) muestran una alta tasa de respuesta,
-con porcentajes del 50% para (ARG), 48,7% para (CAF) y la combinación de
-ambos compuestos (ARG+CAF) siendo la que alcanza el valor más alto, con
-porcentaje de 52,8% (Anexo.1). Por otro lado, el tratamiento sin
-compuesto no azucarado (SIN CNA) presenta una menor tasa de respuesta.
-El control sin olor (SIN OLOR) no muestra ninguna respuesta, por lo
-tanto el protocolo aplicado fue adecuado.
-
-#### Análisis de las variables aleatorias
-
-Como variables aleatorias se incluyeron las variables Nido y Día. Con el
-fin de controlar mejor la variabilidad asociada con la estructura
-jerárquica de los datos, reduciendo posibles sesgos y mejorando la
-robustez de las estimaciones sobre los efectos de los tratamientos
-experimentales. La variable Nido captura la alta variabilidad genética,
-estacional y comportamental entre nidos. Mientras que la variable Día
-refleja fluctuaciones temporales, como cambios ambientales o
-relacionados con el experimento. La inclusión de estas variables busca
-capturar y controlar fuentes de variabilidad, con el objetivo de evaluar
-si mejora la precisión y robustez de las estimaciones del modelo. En
-este contexto, es importante considerar que los datos obtenidos del nido
-4 fueron recolectados durante el otoño, entre el 25 de marzo y el 17 de
-abril. En esta época del año es habitual que la actividad de los nidos
-de abejorros decaiga, y que la reina entre en hibernación hasta el
-siguiente periodo de floración. Por lo tanto, es razonable suponer que
-la actividad de este nido esté alterada y sea menor de lo habitual.
-Asimismo, la baja actividad del nido 4 dificultó la toma de datos, lo
-que limitó su representación en todos los tratamientos (Tabla 3). En
-consecuencia, se anticipa que el nido 4 no seguirá las tendencias
-observadas en los demás nidos.
-
-#####Nido:
-
-```{r nidostabla, echo=FALSE}
-#Los datos Sin olor no los vamos a incluir en el modelo asique los borro
-DatosMemoria <- Filt_3 %>%
-  filter(Tratamiento != "SIN OLOR")
-#####HAgo spagetti plot para evaluar los distintos nidos #########
-table (Datos$Nido,Datos$Tratamiento)# n de cada tratamiento para cada nido
-```
-
-**Tabla 4: Número total de animales en función del tratamiento para los
-distintos nidos.**
-
-```{r nidos, echo=FALSE}
-# Calcular la tasa de aprendizaje promedio por tratamiento
-TasaAprendizaje <- DatosMemoria %>%
-  group_by(Tratamiento, Nido) %>%
-  summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
-# Tasas de aprendizaje por Nido
-ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour =as.factor(Nido), group = Nido)) +
-  labs(title = "Tasa Promedio de Aprendizaje por Tratamiento\n según el nido ",
-       x = "Tratamiento",
-       y = "Tasa de Aprendizaje Promedio",
-       colour= "Nido") +
-  geom_point() +
-  geom_line() +
-  theme_bw()
-
-```
-
-*Figura 4: Gráfico de perfiles de la tasa promedio de aprendizaje en
-función del tratamiento para los distintos nidos evaluados.*
-
-En el gráfico se muestran las tasas promedio de aprendizaje en los
-distintos tratamientos (ARG, CAF, CAF+ARG y SIN CNA) para los cuatro
-nidos (2, 4, 5 y 6). Las tendencias observadas para los nidos 2, 5 y 6
-fueron similares entre sí, mostrando valores de tasa de aprendizaje
-elevadas para los tratamientos con CNA y sustancialmente menores para
-aquellos sin CNA. El nido 5 se destacó por presentar tasas de
-aprendizaje mayores al resto. Tal como se esperaba el nido 4 no presentó
-las mismas tendencias que los otros nidos, mostrando una mayor tasa de
-aprendizaje bajo el tratamiento sin CNA. Por lo tanto se optó por
-excluir los datos correspondientes a este nido en el análisis.
-
-```{r nido 4, include=FALSE}
-summary(Datos$Nido) #Cantidad de datos por nido
-Nido4<- DatosMemoria%>%
-  filter(Nido == "9")
-summary(Nido4$Tratamiento)
-#Sacamos al nido 4
-DatosMemoria<- DatosMemoria%>%
-  filter(Nido != "4")
-```
-
-#### Día:
-
-Para analizar la variable aleatoria Día se realizó un gráfico de
-perfiles el cual muestra una gran variabilidad en las tasas de
-aprendizaje promedio según el tratamiento y el día de captura. No se
-observa una tendencia entre los distintos tratamientos con
-CNA aunque en la amplia mayoría de los casos el tratamiento control sin
-compuestos agregados presenta una menor tasa de aprendizaje. No todos
-los días cuentan con datos en cada tratamiento, lo que dificulta la
-interpretación general.
-
-```{r Día, echo=FALSE}
-### grafico de perfiles por dia ###
-TasaAprendizaje <- DatosMemoria %>%
-  group_by(Tratamiento,Dia) %>%
-  summarise(TasaPromedio = mean(Recuerda, na.rm = TRUE), .groups = "drop")
-print(TasaAprendizaje)
-#Grafico
-ggplot(TasaAprendizaje, aes(x = Tratamiento, y = TasaPromedio, colour = factor(Dia), group = Dia)) +
-  labs(title = "Tasa de Aprendizaje por Tratamiento según\n el día de captura",
-       x = "Tratamiento",
-       y = "Tasa de Aprendizaje Promedio") +
-  geom_point() +
-  geom_line() +
-  theme_bw()
-
-```
-*Figura 5: Gráfico de perfiles de la tasa promedio de aprendizaje en función del tratamiento para los distintos días evaluados.*
-
-## Modelo
-
-Se plantea un modelo lineal generalizado mixto de comparación de medias con:
-  - Tratamiento como variable de efectos fijos cualitativa con 4 niveles (CAF, ARG, CAF+ARG y SIN CNA)
-  - Cantidad de ingestas como variable de efectos fijos cualitativa con dos niveles (Alta y Baja)
-  - Nido como variable cualitativa de efectos aleatorio con tres niveles (2, 5 y 6) 
-  - Respuesta al PER como variable respuesta dicotómica (1= extensión de probóscide solo a Lionanol, 0= no extensión al Lionanol o extensión a Lionanol y al Nonanal) 
-  Se espera que la VR ajuste a distribución de tipo Bernoulli.
-
-Sea $Y_i$ la respuesta de extensión de probóscide, donde:
-
-$$
-Y_i = 
-\begin{cases} 
-1 & \text{si hay extensión de probóscide} \\
-0 & \text{si no hay extensión de probóscide}
-\end{cases}
-$$
-
-y se modela como una variable de distribución Bernoulli:
-
-$$
-Y_i \sim \text{Bernoulli}(\pi_i)
-$$
-
-La probabilidad de extensión de probóscide, $\pi_i$, se modela con un
-enlace logit:
-
-$$
-\text{logit}(\pi_i) = \eta_i = \mu + \alpha_i + \beta_j + N_k
-$$
-
-donde:
-
--   $\mu$ es el intercepto general.
--   $\alpha_i$ representa el efecto del tratamiento (con
-    $i = 1, \dots, 5$).
--   $\beta_j$ representa el efecto del nivel de condicionamiento (con
-    $j = 1$ para bajo y $j = 2$ para alto).
--   $N_k$ es el efecto del nido (con $k = 1, 2, 3$) que representa la
-    varianza asociada al nido donde están los abejorros, introducido
-    como efecto aleatorio.
-
-```{r Modelo ingestas, include=FALSE}
-DatosMemoria2 <- DatosMemoria
-#Defino variable Condicionamiento2 #######
-DatosMemoria <- DatosMemoria %>%
-  rowwise() %>%
-  mutate( Condicionamiento2 = if_else(Condicionamiento < 5, "Bajo", "Alto"),)
-
-MMixto2<- glmer(Recuerda~Tratamiento+Condicionamiento2+(1|Nido), data=DatosMemoria, family=binomial)
-
-```
-
-#### Supuestos
-
- Muestra aleatoria y observaciones independientes.
- Normalidad para los efectos aleatorios.
-Ausencia de patrones en los residuos, chequeo de outliers.
-
-No se encontraron evidencias para rechazar ninguno de los supuestos del modelo, posteriormente se realizó un test de selección de modelos, para evaluar si la inclusión de Cantidad de ingestas durante el condicionamiento justificaba el uso de un modelo más complejo. No se encontraron evidencias para diferenciar los modelos (Pr(Chisq)=0.5816). Por lo tanto, se recurrió al criterio de información de Akaike (AIC), al criterio de información bayesiano (BIC) y a la devianza para seleccionar el modelo más adecuado. Finalmente, se optó por el modelo más simple, dado que resultó ser el más parsimonioso (Anexo 4).
-
-Ya seleccionado un modelo se realizó un test global en el cual no se evidenciaron diferencias significativas entre la tasa de respuesta al PER bajo los distintos tratamientos (Chi Sq Test = 0.09525) (Anexo 5). Se estimó la tasa de respuesta 
-
-```{r ANOVA, include=FALSE}
-MMixtoNido<- glmer(Recuerda~Tratamiento+ Peso+(1|Nido), data=DatosMemoria, family=binomial)
-A4<-anova(MMixto2,MMixtoNido)
-```
-
-
-```{r Modelo mixto VA nido, include=FALSE}
-summary(MMixtoNido) 
-Anova(MMixtoNido)
-
-```
-
-Tabla 5:  Probabilidad media y su IC, con una confianza del 95%, de mostrar retención de la memoria a las 24hs para cada tratamiento.
-```{r Emmeans, echo=FALSE}
-em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+# Calcular los porcentajes
+tabla_fuma <- Tabaco %>%
+  group_by(fuma_o_no) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+print (tabla_fuma)
+
+#Cuantos corresponden a cada nivel de ingreso
+
+tabla_fuma <- Tabaco %>%
+  group_by(quintil_ing, fuma_o_no) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+tabla_ingresos <- tabla_fuma %>%
+  filter(fuma_o_no == "Fuma") %>%
+  select(quintil_ing, fuma_o_no, cantidad, porcentaje)
+print(tabla_ingresos)
+#Cuantos corresponden a cada nivel educativos
+
+tabla_inst <- Tabaco %>%
+  group_by(instruccion, fuma_o_no) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+tabla_inst <- tabla_inst %>%
+  filter(fuma_o_no == "Fuma") %>%
+  select(instruccion, fuma_o_no, cantidad, porcentaje)
+print(tabla_inst)
+
+#                ---------                    #
+##FUMAN DENTRO  DEL HOGAR/ALGUIEN FUMA DENTRO DEL HOGAR
+
+# Calcular los porcentajes
+tabla_humo <- Tabaco %>%
+  group_by(humo_hogar) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+print (tabla_humo) #1=si
+
+
+#Cuantos corresponden a cada nivel de ingreso
+
+tabla_humo_ing <- Tabaco %>%
+  group_by(quintil_ing, humo_hogar) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+tabla_humo_ing <- tabla_humo_ing %>%
+  filter(humo_hogar == "1") %>%
+  select(quintil_ing, humo_hogar, cantidad, porcentaje)
+print(tabla_humo_ing )
+#Cuantos corresponden a cada nivel educativos
+
+tabla_inst <- Tabaco %>%
+  group_by(instruccion,humo_hogar) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+tabla_inst <- tabla_inst %>%
+  filter(humo_hogar == "1") %>%
+  select(instruccion,  humo_hogar, cantidad, porcentaje)
+print(tabla_inst)
+
+
+#                ---------                    #
+##FUMAN DENTRO  DEL HOGAR y hay menores  
+# Calcular los porcentajes de las casas con menores, uantas tienen humo de tabaco.
+
+tabla_menores <- Tabaco %>%
+  group_by(menores18) %>%
+  filter(menores18 != 0)
+print (tabla_menores) #solo me quedo con los hogares con menores de edad
+  
+tabla_humo <- tabla_menores %>%
+  group_by(humo_hogar) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+print (tabla_humo) #1=si
+
+tabla_humo_ing <- tabla_menores %>%
+  group_by(quintil_ing, humo_hogar) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+tabla_humo_ing <- tabla_humo_ing %>%
+  filter(humo_hogar == "1") %>%
+  select(quintil_ing, humo_hogar, cantidad, porcentaje)
+print(tabla_humo_ing )
+#Cuantos corresponden a cada nivel educativos
+
+tabla_inst <- tabla_menores %>%
+  group_by(instruccion,humo_hogar) %>%
+  summarise(cantidad = n()) %>%
+  mutate(porcentaje = cantidad / sum(cantidad) * 100)
+tabla_inst <- tabla_inst %>%
+  filter(humo_hogar == "1") %>%
+  select(instruccion,  humo_hogar, cantidad, porcentaje)
+print(tabla_inst)
+
+
+##### Modelado ####
+#Pregunta 1: La exposicion al humo en menores de edad es la misma para todos los niveles educativos y socioeconomicos? 
+#Pregunta 2: El nivel educativo o la situacion socioeconomica tiene efecto sobre (% fuma en hogares- %fuma en hogares con menores)
+
+#Modelo nivel educativo y situacion socioeconomica como VE, provincia como VA?, VR= presencia ausencia de humo en hogares con menores de edad.
+#VR debe tener el exito=1 y el fracaso = 0 asiqe reasigno los valores de manera uqe las hogares sin humo=0
+tabla_menores$humo_hogar <- ifelse(tabla_menores$humo_hogar == 2, 0, tabla_menores$humo_hogar)
+# Plantear el modelo de regresión logística
+modelo <- glm(humo_hogar ~ quintil_ing+ instruccion, 
+              data = tabla_menores, 
+              family = binomial(link = "logit"))
+
+
+summary(modelo)
+
+#supuestos
+
+library(DHARMa)
+sim<-simulateResiduals(modelo,n=1000)
+testDispersion(sim)#no rechazo supuestos ! :)
+
+library(emmeans)
+em_means <- emmeans(modelo , ~ quintil_ing, type = "response") #### Hace las comparaciones
 confint(em_means)
-```
 
-
-```{r EmmeansPlot, echo=FALSE}
 contrasts <- contrast(em_means, method = "pairwise")
 summary(contrasts)
+confint(contrasts)
 #### gráfico de comp.
 em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
 
-ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asymp.UCL, color = Tratamiento)) +
+library(ggplot2)
+ggplot(em_means_df, aes(x = quintil_ing, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
   geom_point(size = 3) +                       # Puntos para las medias marginales ajustadas
   geom_errorbar(width = 0.2) +                 # Barras de error para los intervalos de confianza
-  labs(x = "Tratamiento", y = "Probabilidad de memoria") + # Etiquetas de los ejes
-  scale_color_manual(values = c("SIN OLOR" = "#76A5Af",
-                                "SIN CNA" = "#E1B701",
-                                "CAF" = "#E69138",
-                                "ARG" = "#8E7CC3",
-                                "CAF+ARG" = "#C27BA0")) +
   theme_minimal()
 
-```
-*Figura 6: Comparación de los valores medios y los IC, con una confianza del 95%,  de la probabilidad de mostrar retención a las 24hs para cada tratamiento.*
 
-En el gráfico se observa la probabilidad de generar memoria asociativa entre un olor y una recompensa a las 24 horas del entrenamiento para los diferentes tratamientos: ARG, CAF, CAF+ARG y SIN CNA, con sus respectivos intervalos de confianza (\alpha
-= 0.05). Existe una tendencia a una mayor generación de memoria en los individuos que consumieron cafeína y/o arginina, en particular en el grupo CAF+ARG, que muestra la mayor probabilidad de memoria de 0,475 con un intervalo de confianza entre 0,28 y 0,78. El tratamiento SIN CNA presenta una probabilidad de recordar a las 24 hs de 0,209 mientras que ARG y CAF muestran probabilidades similares de 0.475 y 0,427 respectivamente. Sin embargo, estas diferencias no son estadísticamente significativas según una prueba global (Chisq test = 0.1829), lo que indica que no se encontraron evidencias para diferenciar entre sí.
+#### lo mismo pero con nivel de intruccion
+em_means <- emmeans(modelo , ~ instruccion, type = "response") #### Hace las comparaciones
+confint(em_means)
 
-Con el objetivo de verificar la hipótesis 1 se decidió entonces realizar un contraste a priori mediante Bonferroni. Para realizarlo se reagruparon los datos en dos grupos en base a sus tratamientos: el primero “Con CNA”, uniendo a los tratamientos “Cafeína”, “Arginina” y “Cafeína + Arginina”, y un segundo grupo “Sin CNA” que contaba con los animales que recibieron únicamente solución azucarada durante el entrenamiento.
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts)
+confint(contrasts)
 
-```{r Bonferreoni, echo=FALSE}
-tratamientos <- c("ARG", "CAF", "CAF+ARG")  # Reemplaza con tus tratamientos
-control <- "SIN CNA"  # Nombre del tratamiento de control
+#### gráfico de comp.
+em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
 
-# Crear un contraste personalizado para comparar el promedio ponderado de los tratamientos con el control
-contraste <- contrast(
-  em_means,
-  method = list(
-    "Con CNA vs Control" = c(
-      rep(1 / length(tratamientos), length(tratamientos)),  # Coeficientes para los tratamientos
-      -1  # Coeficiente para el control
-    )
-  ),
-  by = NULL
-)
-
-# Aplicar la corrección de Bonferroni
-OR<-summary(contraste, adjust = "bonferroni")
+ggplot(em_means_df, aes(x = instruccion, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_point(size = 3) +                       # Puntos para las medias marginales ajustadas
+  geom_errorbar(width = 0.2) +                 # Barras de error para los intervalos de confianza
+  theme_minimal()
 
 
-# Suponiendo que tienes un objeto 'contraste' generado con emmeans::contrast
-OR <- summary(contraste, adjust = "bonferroni")
-IC <- confint(contraste, adjust = "bonferroni")
 
-# Mostrar resultados
-print(OR)
-print(IC)
-```
-Tabla 5:  Contraste a priori por Bonferroni entre grupo “Con CNA” o “Promedio” (que agrupa “CAF”, “ARG” y “CAF+ARG”) y grupo “Control” (“Sin CNA”).
 
-Existen evidencias suficientes para concluir que los tratamientos en abejorros con los compuestos no azucarados utilizados en este estudio (CAF y/o ARG) tienen un efecto positivo de 0.68 a 4.36 veces mayor en la formación de memoria a largo plazo (a las 24 horas) en comparación con un grupo control que recibió únicamente una solución azucarada (SIN CNA). Este resultado se obtuvo mediante una comparación a priori utilizando la corrección de Bonferroni, con un valor de p < 0.05.
 
-## Discusión y Conclusiones
-
-El consumo Cafeína y/o Arginina por parte de un abejorro Bombus
-pauloensis perteneciente de un nido industrial tipo, en CABA, provoca un
-incremento en promedio de aproximadamente 2,5 veces en la retención de
-la memoria olfativa a largo plazo en contraste con un abejorro que
-consumió únicamente solución azucarada.
-
-Por lo tanto sería conveniente el empleo de estos compuestos en la
-práctica agronómica de polinización dirigida de plantas frutales de alto
-valor económico, y así reducir la utilización de especies no nativas.
-
-Adicionalmente se recomendaría reforzar, mediante un incremento en el n experimental, si la tendencia observada del efecto aditivo de ambos compuestos no azucarados tendría un efecto o no en la retención de la memoria
-
-# Anexo
-
-### A. 1: 
-
-```{r A1, echo=FALSE}
-print(A1)
-```
-
-*Anexo 1: Porcentaje de abejorros que respondieron mediante PER a las 24hs dentro de cada tratamiento,.*
-
-### A. 2:
-
-```{r Modelo DIA y NIDO, echo=FALSE}
-#### MODELO CON DIA Y NIDO COMO VA ####
-MMixtoNidoDia <- glmer(Recuerda ~ Tratamiento + (1|Nido) + (1|Dia), data=DatosMemoria, family=binomial)
-
-isSingular(MMixtoNidoDia) #Da True, la varianza explicad apor dia ya esta expklicada por optras variables del modelo, no aporta nada y complejiza el modelo. Descartamos esta variable aleatoria.
-
-summary (MMixtoNidoDia) # Confirmo
-```
-
-*A.2: Al ajustar el modelo con las variables aleatorias Día y Nido, se observa el mensaje boundary(Singular), que indica problemas de singularidad en el modelo. Esto quiere decir que alguna de las variables aleatorias no aporta suficiente variabilidad y, por lo tanto, no contribuye de manera significativa al modelo. Esto fue confirmado al ejecutar isSingular(MMixtoNidoDia) devolviendonos TRUE. Además, al correr el summary del modelo (Anexo 2), observamos que la varianza de la variable aleatoria Día es muy baja, especialmente en comparación con la varianza de la variable Nido.*
-
-### A.3
-```{r Supuestos, echo=FALSE}
-#Supuestos
-simm2 <- simulateResiduals(fittedMod = MMixto2)
-plot(simm2)
-
-```
-
-*A3.1: Prueba de ajuste a una distribución uniforme usando un QQplot de residuos re-escalados (izquierda) y evaluación de desviación de la uniformidad y homogeneidad de varianza (derecha) utilizando el paquete DHARMa.*
-
-En el panel izquierdo, se presenta un gráfico QQ de los residuos, donde se observa la distribución de los residuos simulados comparada con la distribución teórica esperada (línea roja). Los resultados de varias pruebas de ajuste también se incluyen en este panel: el test de Kolmogorov-Smirnov (KS test) muestra un valor de p = 0.06095, indicando que no hay desviaciones significativas de la normalidad; el test de dispersión tiene un valor de p = 0.376, lo que sugiere que no hay desviación significativa en la dispersión; y el test de outliers (valor de p = 1) indica que no se encontraron valores atípicos significativos en los residuos.
-
-En el panel derecho, se muestra un gráfico (boxplot) que evalúa la homogeneidad de los residuos a través de los grupos predictores. El test de Levene, indicado en el gráfico, muestra que no hay diferencias significativas en la varianza de los residuos entre grupos, sugiriendo homogeneidad de varianza. En general, los resultados de ambas gráficas indican que los residuos cumplen con los supuestos de normalidad, homogeneidad y ausencia de outliers, lo que respalda la validez del modelo ajustado.
-
-### A.4: Criterio de selección de modelo
-```{r comparacion de modelos, echo=FALSE}
-A4
-```
-*A.4: AIC contrastando modelo mixto con o sin “Ingestas” como variable fija.*
-
-### A.5: Criterio de selección de modelo
-```{r comparacion de modelos2, echo=FALSE}
-A5.1
-```
-Anexo 5.1: Summary del modelo mixto seleccionado. 
-```{r comparacion de modelos3, echo=FALSE}
-A5.2
-```
-Anexo 5.2: Test Global mediante Chi Sq. del modelo seleccionado. No se obtiene una diferencia significativa (Chi Sq Test = 0.09525) .
