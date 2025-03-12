@@ -1,0 +1,205 @@
+---
+title: "Problema práctica taller RMD"
+author: "SF"
+date: "2024-11-6"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Problema TEQ version resumida
+
+El Tratamiento Electroquímico de tumores (TEQ) consiste en el pasaje de una corriente eléctrica continua a través de dos o más electrodos insertados localmente en el tejido tumoral. El proceso implica complejas reacciones bioquímicas que resultan en la necrosis del tejido expuesto. Se ha propuesto a los cambios extremos de pH inducidos alrededor de los electrodos (alta acidez en el ánodo y alta basicidad en el cátodo) como el principal mecanismo de destrucción tumoral (Miklavcic; 2017). Un grupo de investigadores e investigadoras de nuestro país realizan una experiencia para analizar dos configuraciones de colocación de electrodos (círculo o parábola) para frenar el desarrollo tumoral. Además se desea conocer si la efectividad de las configuraciones varía según la dosis del TEQ. Para ello, llevan a cabo un ensayo in vivo en el cual se inoculan tumores de la línea M2 (adenocarcinoma mamario murino) a 40 ratones BALB/c (1 tumor por ratón). Los ratones se dividen en forma aleatoria en 8 grupos balanceados y a cada grupo se le aplica una de las dos configuraciones de electrodos y una de las cuatro dosis de TEQ ensayadas (0,  30, 50 y 65 Coulombs). Al cabo de 20 días se determina por ecografía el volumen del tumor inoculado (en $mm^3$).  
+
+![Raton BALB/c](raton.jpeg){width=20%}
+
+Los datos se encuentran en el archivo *TEQ.cvs*, contiene  40 observaciones (filas) y 4 variables (columnas). 
+
+######  Diccionario de variables:
+- “raton”: número de ratón, integer.
+- “dosis”: dosis de TEQ (Coulombs), integer.
+- “config”:  configuración de colocación del electrodo,  factor/character. 
+- “volumen”: volumen del tumor inoculado (mm3), numeric. 
+
+
+
+
+
+**1)** Identifique las variables explicativas, el diseño y la cantidad de réplicas.
+
+###### variables explicativas:
+- Tratamiento configuracion, fija, categorica, 2 niveles.
+- Dosis de TEQ, fija, cuantitativa. 
+
+- Tratamiento y dosis estan cruzadas
+
+-  Se trata de un DCA 
+
+###### Cantidad de replicas: 
+- 5 replicas por tratamiento (combinacion de dosis y configuracion)
+
+
+**2)** Escribir el modelo en parámetros e inetrpretar los términos 
+
+
+$$
+Y_{i}=\beta_0 + \beta_1*Configuracion\:Parabola _{i} +\beta_2*dosis_{i}+\beta_3*Configuracion \:Parabola*dosis_{i}+\epsilon_{i}
+$$
+
+$$
+i=1:40
+$$
+
+$$
+\epsilon_{i}\sim NID(0,\sigma^2)\\  
+$$
+
+**Interpretación de los términos del modelo**
+
+- $Y_i$: volumen del i-esimo tumor 
+- $\beta_0$: Es el valor del volumen medio del tumor para la ConfiguracionCirculo y valor de dosis de TEQ de 0 Coulombs
+- $\beta_1$: Es la diferencia media en el volumen tumoral entre configuración circulo y parábola cuando la dosis de TEQ es 0 
+- $\beta_2$: Es el cambio esperado en el volumen medio del tumor por cambio unitario de dosis de TEQ para la configuracion Circulo
+- $\beta_3$: Es el cambio medio esperado en $\beta_2$ cuando el tratamiento configuracion es Parabola (diferencia de pendientes)
+
+
+**3)** Explorar el data frame
+
+```{r include = FALSE}
+# cargar el data.frame
+Datos <- read.csv("TEQ.csv", stringsAsFactors = T)
+str(Datos)
+head(Datos)
+```
+
+
+#### Resumen de las variables
+
+```{r echo=FALSE}
+summary(Datos)
+```
+
+**4)** Realizar un gráfico descriptivo que muestre la relacion entre volumen y dosis, discriminado por configuracion
+
+```{r}
+library(ggplot2)
+q<-ggplot(Datos, aes(x =dosis , y = volumen, colour =config)) +  
+  geom_point(aes(), size=2) + 
+  xlab("dosis") +  
+  ylab("volumen") +  
+  ggtitle("volumen tumoral en funcion de la dosis")+
+  geom_smooth(method = "lm")
+q
+
+```
+
+
+
+**5)** Ajuste el modelo propuesto.  ¿Cuáles y cuántos parámetros deben estimarse?
+```{r}
+m1 <- lm(volumen ~ config*dosis, Datos)
+```
+
+Este modelo estima 5 parametros (4 coeficientes y 1 varianza)
+
+
+**5)**  Realice un gráfico de residuos del modelo vs valores predichos. En base al patrón observado, ¿qué supuestos evalúa y qué concluye? 
+
+```{r }
+e <- resid(m1) # residuos
+re<-rstandard(m1) #residuos estandarizados
+pre<-predict(m1) #predichos
+```
+
+
+```{r}
+par(mfrow = c(1, 2))
+plot(pre, re, xlab="Predichos", ylab="Residuos estandarizados",main="RE vs PRED - Modelo 2" )
+abline(0,0)
+```
+
+
+Se puede evaluar homocedasticidad y linealidad. No hay evidencia de heterocedasticidad, observando que la dispersion de los residuos **alrededor del cero** es mas o menos constante en el gráfico de residuos de pearson vs valores ajustados, por lo tanto no modelaria varianza.
+
+Respecto al supuesto de linealidad, No se rechaza el supuesto de linealidad porque en el grafico de residuos vs predichos los residuos parecen estar distribuidos al azar (no presentan patron que indique otro tipo de relacion no lineal).
+
+
+**6)** Evalúe el supuesto de normalidad. ¿Cuál es la hipótesis nula de la prueba de hipótesis correspondiente? ¿Cuáles y cuántos datos se utilizan? Efectúe la prueba y concluya. 
+
+
+```{r}
+prueba_shapiro <- shapiro.test(e)
+prueba_shapiro$p.value
+```
+
+
+Hipotesis
+
+Ho: los errores siguen una distribucion Normal con media cero y varianza $\sigma^2$
+
+No hay evidencia para rechazar que los errores se ajustan a una distribucion normal (con media cero y varianza sigma2) (pvalor= `r prueba_shapiro$p.value` )
+
+
+**6a)**  Ajustar el modelo y concluir en relación al objetivo del estudio. 
+
+```{r}
+m1 <- lm(volumen ~ config*dosis, Datos)
+anova(m1)
+```
+
+El efecto de la configuración sobre el volumen del tumor **depende** del nivel de dosis del TEQ (p<0.05)
+
+
+```{r}
+summary(m1)
+```
+
+
+
+**6b)**  Informar el R2 del modelo 
+`
+
+
+
+**7)** A partir del modelo ajustado, ¿es posible predecir el volumen medio que tendrá un tumor sometido a la configuración círculo con una dosis de 60 Coulombs? En caso que se pueda, estimar dicho valor.
+
+
+```{r}
+y <-3199.7 - 11.76*60
+y
+```
+
+
+Se estima que el volumen medio del tumor cuando se somete a la configuracion circulo y una dosis de 60 Coulombs es de `r y`
+
+**8)** Escribir un párrafo reportando materiales y métodos y otro reportando resultados. Acompañe con una figura convenientemente rotulada con las estimaciones del modelo.
+
+#### MyM
+
+Para analizar .... se ajustó un modelo de regresión con dosis y configuración como predictoras...
+
+El supuesto de normalidad de los errores se estudió gráficamente mediante un gráfico de qqplot y analíticamnete mediante la prueba de shapiro. La homocedasticidad se analizó gráficamente mediante un gráfico de residuos vs valores predichos. 
+
+Todos los análisis se efectuaron con R (R Core Team).
+
+
+
+#### Resultados 
+Los principales resultados de este estudio indicaron que el volumen medio del tumor se reduce con la dosis de TEQ y que esta reduccion depende de la configuracion de los electrodos (interacción significativa). Se detectó una mayor efectividad en la reducción del volumen del tumor en la configración circulo comparada con parábola, para dosis entre 0 y 65 C.
+La recomendación que se desprende del estudio es aplicar la dosis de 65 Coulombs y una configuración de círculo, ya que es dónde se espera obtener el menor volumen de tumor a los 20 días días de aplicada la experiencia, con una diferencia promedio de entre 417 y 452 mm3 respecto a la configuración de Parabola.  
+
+
+```{r fig.width=5, fig.height=4, fig.align='center', fig.cap='Figura 1. Volumen tumoral vs Dosis, discriminado por con tipo de configuración'}
+library(ggplot2)
+library(ggeffects)
+a<-ggpredict(m1, terms = c( "dosis","config")
+)
+p <- plot(a, add.data = F, grid = F)  
+p +  labs(x="Dosis (C)") + labs(y="Volumen (mm³) ") + ggtitle(" ") 
+```
+

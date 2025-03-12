@@ -43,7 +43,7 @@ ggplot(Supervivencia, aes(x = Grupo_Tratamiento, y = Supervivencia)) +
   theme_minimal()
 
 #-----------------------------------------------------------------------
-# Filtrar para los que tomaron al menos 3 veces, sobrevivieron, y cumplieron con las condiciones de LIO y NONA
+# Filtrar para los que tomaron al menos 3 veces, sobrevivieron, y cumplieron con las condiciones de NONA
 Filt_Cond_Sup_Esp <- Datos %>%
   filter(Condicionamiento >= 3, Muere == 0,`NONA 24 hs` == 0)
 
