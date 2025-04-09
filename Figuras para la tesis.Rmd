@@ -1,0 +1,110 @@
+---
+title: "Analisis de Datos: EFECTOS COMBINADOS DE COMPUESTOS SECUNDARIOS PRESENTES EN NÉCTARES SOBRE LA FORMACIÓN DE LA MEMORIA A LARGO TÉRMINO EN EL ABEJORRO NATIVO Bombus pauloensis"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(lme4)
+library(ggplot2)     # La vamos a utilizar para graficas
+library(dplyr)       # La vamos a utilizar para armar tablas resumen
+library(car)         # La vamos a utilizar para analisis de algunos supuestos 
+library(glmmTMB)     # La vamos a utilizar para ajustar el modelo 
+library(DHARMa)      # La vamos a utilizar para analizar supuestos
+library(performance) # La vamos a utilizar para analizar supuestos y más ...
+library(emmeans)     # La vamos a utilizar para realizar comparaciones 
+library(ggeffects)   # La vamos a utilizar para obtener (y graficar) los valores predichos por el modelo
+library(sjPlot)   
+# Analisis exploratorio integral
+setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
+Datos <- read_excel("Datos abejorros Integrados dosisi simple y doble 19_3_2025.xlsx",col_names = TRUE,  sheet = "Integración")
+Datos$Tratamiento<- as.factor(Datos$Tratamiento)
+summary (Datos$Tratamiento)
+
+#Defino variable respuesta, Recuerda
+Datos <- Datos %>%
+  filter(Tratamiento != F)%>%
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
+```
+
+## GitHub Documents
+
+This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
+
+#Curva de adquisicion:
+Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de  que les ofrezca la recompenza.
+
+
+```{r adquisicion, echo=FALSE}
+ # Paquetes necesarios
+ library(tidyverse)
+ 
+ # Manipulación para encontrar la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
+DatosCurva <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Tratamiento !=  "F", Nido!="4") %>%
+  rowwise() %>%
+  mutate(
+    Primera_T = which(c_across(starts_with("E")) == "T")[1],
+    
+    Primera_A = which(c_across(starts_with("E")) == "A")[1],
+    T_A= Primera_A - Primera_T + 1
+  ) %>%
+  ungroup()
+ 
+resumen_aprendizaje <- DatosCurva %>%
+  group_by(Tratamiento) %>%
+  summarise(
+    Promedio_Exp = mean(T_A, na.rm = TRUE),
+    SD = sd(T_A, na.rm = TRUE),
+    N = n(),
+    SE = SD / sqrt(N)
+  )
+ 
+
+curvas_aprendizaje <- DatosCurva %>%
+  group_by(Tratamiento, T_A) %>%
+  summarise(N = n(), .groups = "drop") %>%
+  group_by(Tratamiento) %>%
+  mutate(Proporcion = cumsum(N) / sum(N))
+
+# Parche: agregar punto (1, 0) para cada tratamiento si no existe
+puntos_inicio <- curvas_aprendizaje %>%
+  distinct(Tratamiento) %>%
+  mutate(T_A = 1, Proporcion = 0, N = 0)
+
+# Solo para graficar
+curvas_aprendizaje %>%
+  bind_rows(puntos_inicio) %>%
+  arrange(Tratamiento, T_A) %>%
+  ggplot(aes(x = T_A, y = Proporcion, color = Tratamiento)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 1:max(Datos$T_A, na.rm = TRUE)) +
+  labs(
+    x = "Exposiciones con Ingesta",
+    y = "Proporción Acumulada de Aprendizaje",
+    title = "Curvas de adquisición por Tratamiento") +
+  scale_color_manual(values = c("SIN CNA" = "lightblue",
+                                "CAF" = "#E69138",
+                                "ARG" = "#8E7CC3",
+                                "CAF+ARG" = "#C27BA0",
+                                "2 CAF" = "orange",
+                                "2 ARG" = "purple",
+                                "2 CAF+ARG" = "#D22176"))+
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
