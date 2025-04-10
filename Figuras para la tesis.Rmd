@@ -20,7 +20,7 @@ library(ggeffects)   # La vamos a utilizar para obtener (y graficar) los valores
 library(sjPlot)   
 # Analisis exploratorio integral
 setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
-Datos <- read_excel("Datos abejorros Integrados dosisi simple y doble 19_3_2025.xlsx",col_names = TRUE,  sheet = "Integración")
+Datos <- read_excel("integrados 10-4-25.xlsx",col_names = TRUE,  sheet = "Integración")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
@@ -83,7 +83,6 @@ curvas_aprendizaje %>%
   ggplot(aes(x = T_A, y = Proporcion, color = Tratamiento)) +
   geom_line(size = 1) +
   geom_point(size = 2) +
-  scale_x_continuous(breaks = 1:max(Datos$T_A, na.rm = TRUE)) +
   labs(
     x = "Exposiciones con Ingesta",
     y = "Proporción Acumulada de Aprendizaje",
@@ -99,12 +98,91 @@ curvas_aprendizaje %>%
   theme(legend.position = "bottom")
 ```
 
-## Including Plots
+```{r ModAdquisicion, echo=TRUE}
+#defino variable respuesta
+DatosCurva$Adquisicion <- ifelse(is.na(DatosCurva$T_A), 0, 1)
 
-You can also embed plots, for example:
+MAdqui <- glmer(Adquisicion ~ Tratamiento + (1|Nido) + (1|Dia), data=DatosCurva, family=binomial)
+summary (MAdqui)
+anova (MAdqui)
+comparaciones <- emmeans(MAdqui, pairwise ~ Tratamiento, type = "link", adjust = "tukey")
+summary(comparaciones$contrasts)
+print (emm)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
 ```
+En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso de adquisicion.
+
+
+
+## Efecto de cantidad de ingestas en la formacion de memoria.
+
+
+```{r ingestas, echo=FALSE}
+#Defino variable respuesta, Recuerda
+Datos <- Datos %>%
+  filter(Tratamiento != F)%>%
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0)) 
+  
+
+###Gráfico de % Resp vs canti de ingestas, discriminando por tratamiento
+Vivos <- Datos %>%
+  filter( Muere == 0)
+Respuesta_general <-Vivos %>%
+  group_by(Tratamiento, Ingestas) %>%
+  summarise(
+    Responden = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 0),  	# Cuenta cuántos tienen LIO 24hs igual a 1
+    Total = n_distinct(N),             	# Reemplaza "N" por el nombre correcto de la columna de ID única
+    Porcentaje = (Responden / Total), # Calcula el porcentaje de respuesta
+    .groups = "drop")
+ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, colour = Tratamiento)) +
+  geom_point() + 
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) + 
+  labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
+       x = "Cantidad de ingestas",
+       y = "Porcentaje de respuesta al PER 24hs") +
+  scale_color_manual(values = c("SIN CNA" = "lightblue",
+                                "CAF" = "#E69138",
+                                "ARG" = "#8E7CC3",
+                                "CAF+ARG" = "#C27BA0",
+                                "2 CAF" = "orange",
+                                "2 ARG" = "purple",
+                                "2 CAF+ARG" = "#C27")) +
+  theme(text = element_text(size = 14))
+
+Ing <- Datos %>%
+  filter(!is.na(Recuerda)) %>%
+  group_by(Ingestas) %>%
+  summarise(Probabilidad = mean(Recuerda)*100, n = n())
+print (Ing)
+ggplot(Ing, aes(x = as.factor(Ingestas), y = Probabilidad)) +
+  geom_col(fill = "purple") +
+  labs(title = "Probabilidad de recordar el olor a las 24hs en función\n de la cantidad de ingestas en el entrenamiento.",
+       x = "Cantidad de ingestas",
+       y = "Probabilidad de responder al PER (%)") +
+  theme_minimal()
+
+```
+```{r ModIngestas, echo=TRUE}
+#Modelo, VR: Recuerda 24 hs, VE: Cantidad de ingestas, VA: Tratamiento, nido, dia?
+
+Datos$Ingestas <- as.factor(Datos$Ingestas)
+MIng <- glmer(Recuerda ~ Ingestas + (1|Tratamiento)+ (1|Nido)+(1|Dia), 
+              data = Datos, 
+              family = binomial,
+              control = glmerControl(optimizer = "bobyqa", 
+                                     optCtrl = list(maxfun = 2e5)))
+summary (MIng)
+anova (MIng)
+contrastesMIng <- emmeans(MIng, pairwise ~ Ingestas, type = "link", adjust = "tukey")
+summary(contrastesMIng$contrasts)
+print (contrastesMIng)
+
+
+```
+
+
+
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
