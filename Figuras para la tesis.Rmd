@@ -19,8 +19,8 @@ library(emmeans)     # La vamos a utilizar para realizar comparaciones
 library(ggeffects)   # La vamos a utilizar para obtener (y graficar) los valores predichos por el modelo
 library(sjPlot)   
 # Analisis exploratorio integral
-setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
-Datos <- read_excel("integrados 10-4-25.xlsx",col_names = TRUE,  sheet = "Integración")
+setwd("C:\Users\maria\OneDrive\Documentos\GitHub\Abejorros")
+Datos <- read_excel("Datos abejorros CNA- Cafeina y Arginina (1).xlsx",col_names = TRUE,  sheet = "Integración")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
@@ -182,7 +182,46 @@ print (contrastesMIng)
 
 ```
 
+```{r PERTratamiento, echo=TRUE}
+Datos$Nido<- as.factor (Datos$Nido)
+Datos$Dia<- as.factor (Datos$Dia)
+Datos$Ingestas<- as.character (Datos$Ingestas)
+DatosMemoria <- Datos%>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas >= 2, Muere == 0)
+MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia), 
+              data = DatosMemoria, 
+              family = binomial) 
 
+## Supuestos
+simm1 <- simulateResiduals(fittedMod = MMixtoNido) # , refit = T 
+plot(simm1)
+plotResiduals(simm1, DatosMemoria$Tratamiento)
+
+testDispersion(simm1) # dio re lindo el DHARMA
+
+### prueba de shapiro
+#intercept_efectos <- alfai$Nido$(Intercept)
+#car::qqPlot(intercept_efectos)
+#shapiro.test(intercept_efectos) #no rechazo normalidad
+
+#Veo si el efecto del tratamiento es significativo
+summary(MMixtoNido) #no da sig
+drop1(MMixtoNido)
+Anova(MMixtoNido)
+em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts)
+#### grafico de comp.
+em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
+
+ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_point(size = 3) +                      # Puntos para las medias marginales ajustadas
+  geom_errorbar(width = 0.2) +                # Barras de error para los intervalos de confianza
+  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") + # Etiquetas de los ejes
+  theme_minimal()
+
+
+```
 
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
