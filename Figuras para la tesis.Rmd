@@ -19,8 +19,10 @@ library(emmeans)     # La vamos a utilizar para realizar comparaciones
 library(ggeffects)   # La vamos a utilizar para obtener (y graficar) los valores predichos por el modelo
 library(sjPlot)   
 # Analisis exploratorio integral
-setwd("C:\Users\maria\OneDrive\Documentos\GitHub\Abejorros")
-Datos <- read_excel("Datos abejorros CNA- Cafeina y Arginina (1).xlsx",col_names = TRUE,  sheet = "Integración")
+#setwd("C:\Users\maria\OneDrive\Documentos\GitHub\Abejorros")
+
+#Datos <- read_excel("Datos abejorros CNA- Cafeina y Arginina (1).xlsx",col_names = TRUE,  sheet = "Integración")
+Datos <- read_excel("Datos abejorros Integrados dosisi simple y doble 19_3_2025.xlsx",col_names = TRUE,  sheet = "Integración")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
@@ -223,5 +225,53 @@ ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asym
 
 ```
 
+# Supervivencia
+```{r supervivencia, echo=TRUE}
+#Indice de supervivencia segun tratamiento cuando hubo al menos 2 ingestas
+Datos_filtrado <-Datos%>%
+  filter(Ingestas >= 2)
+summary (Datos_filtrado$Tratamiento)
+Supervivencia <- Datos_filtrado %>%
+  mutate(Grupo_Tratamiento = case_when(
+    Tratamiento %in% c("CAF", "ARG", "CAF+ARG", "2 CAF", "2 ARG", "2 CAF+ARG") ~ "CAF_ARG",  # Agrupar "CAF", "ARG", "CAF+ARG" juntos
+    Tratamiento %in% c("SIN CNA", "SIN OLOR") ~ "SIN_CNA_OLOR",  # Agrupar "SIN CNA" y "SIN OLOR"
+    TRUE ~ Tratamiento  # Mantener los otros tratamientos sin cambios si existieran
+  )) %>%
+  group_by(Grupo_Tratamiento) %>%
+  summarise(Sobreviven = sum(Muere == "0" ), 
+            Total = n(), 
+            Supervivencia = Sobreviven / Total)
+print(Supervivencia)
 
+```
+
+```{r MODsupervivencia, echo=TRUE}
+#Indice de supervivencia segun tratamiento cuando hubo al menos 2 ingestas
+#Datos supervivencia
+DatosSupervivencia <- Datos_filtrado %>%
+  mutate(Grupo_Tratamiento = case_when(
+    Tratamiento %in% c("CAF", "ARG", "CAF+ARG", "2 CAF", "2 ARG", "2 CAF+ARG") ~ "CAF_ARG",  # Agrupar "CAF", "ARG", "CAF+ARG" juntos
+    Tratamiento %in% c("SIN CNA", "SIN OLOR") ~ "SIN_CNA_OLOR")) # Agrupar "SIN CNA" y "SIN OLOR"))
+
+modeloSup <- glm(Muere~ Grupo_Tratamiento, 
+              data = DatosSupervivencia, 
+              family = binomial)
+summary(modeloSup)
+Anova(modeloSup)
+em_means <- emmeans(modeloSup, ~ Grupo_Tratamiento)  # esta es la forma correcta
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts, infer = TRUE)
+
+em_means_resp <- summary(em_means, type = "response")
+ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamiento)) +
+  geom_col(width = 0.6, alpha = 0.6, color = "lightblue") +  # Barras de fondo
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +  # Barras de error
+  geom_point(size = 3, color = "black") +  # Punto de la media ajustada
+  labs(
+    x = "Tratamiento",
+    y = "Probabilidad ajustada de mortalidad"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
