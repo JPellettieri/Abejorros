@@ -275,3 +275,31 @@ ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamie
   theme(legend.position = "none")
 ```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+```{r Generalizacion, echo=TRUE}
+Generalizacion <- Datos_filtrado  %>%
+  group_by(Tratamiento) %>%
+  summarise(
+    generalizan = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 1),      # Cuenta cuántos tienen LIO 24hs igual a 1
+    Total = n_distinct(N),                 # Reemplaza "N" por el nombre correcto de la columna de ID única
+    Porcentaje = (generalizan / Total) * 100, # Calcula el porcentaje de respuesta
+    .groups = "drop"
+  )
+Generalizacion
+# Graficar las respuestas en porcentaje según el tratamiento
+library(ggplot2)
+ggplot(Respuesta, aes(x = Tratamiento, y = Porcentaje, fill = Tratamiento)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Porcentaje de Abejorros respondieron a PER en\n función del tratamiento",
+       x = "Tratamiento",
+       y = "Porcentaje (%)") +
+  scale_fill_manual(values = c("SIN OLOR" = "#76A5Af",
+                               "SIN CNA" = "#FFD966",
+                               "CAF" = "#E69138",
+                               "ARG" = "#8E7CC3",
+                               "CAF+ARG" = "#C27BA0")) +
+  theme_minimal()
+```
