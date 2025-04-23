@@ -1,7 +1,8 @@
 # Abejorros
 Efecto de arginina y caf en memoria de abejorros a largo plazo
 
-![Poster Abejorros](https://github.com/user-attachments/assets/7ec6073e-ea46-4135-a718-cada76be8773)
+![featured](https://github.com/user-attachments/assets/d5514355-9760-4d0f-8dd4-b05be2c5c743)
+
 
 Bibliografía: 
 1. Vásquez R, Ballesteros H, Ortegón, Castro U (2006) Polinización dirigida con Apis mellifera en un
