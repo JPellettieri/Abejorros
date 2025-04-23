@@ -11,7 +11,7 @@ cultivo comercial de fresa (Fragaria chiloensis). Revista Corpoica – Ciencia y
 3. Wright GA et al (2013). Caffeine in Floral Nectar Enhances a Pollinator's Memory of Reward. Science 339, 1202. DOI: 10.1126/science.1228806
 4. Couvillon MJ et al. (2015) Caffeinated Forage Tricks Honeybees into Increasing Foraging and Recruitment Behaviors. Current Biology 25, 1–4. http://dx.doi.org/10.1016/j.cub.2015.08.052   
 5. Müller U (2000). Prolonged Activation of cAMP-Dependent Protein Kinase during Conditioning Induces Long-Term Memory in Honeybees. Neuron, Vol. 27, 159–168
-6.Negri P, Maggi M, Correa-Aragunde N, Brasesco C, Eguaras M, Lamattina L (2013). Nitric oxide participates at the first steps of Apis mellifera cellular immune activation in response to non-self recognition. Apidologie, DOI: 10.1007/s13592-013-0207-8
+6. Negri P, Maggi M, Correa-Aragunde N, Brasesco C, Eguaras M, Lamattina L (2013). Nitric oxide participates at the first steps of Apis mellifera cellular immune activation in response to non-self recognition. Apidologie, DOI: 10.1007/s13592-013-0207-8
 
 
 
