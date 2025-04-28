@@ -37,9 +37,7 @@ Datos <- Datos %>%
 
 This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
 
-#Curva de adquisicion:
-Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de  que les ofrezca la recompenza.
-
+# Curva de adquisicion: Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de que les ofrezca la recompenza.
 
 ```{r adquisicion, echo=FALSE}
  # Paquetes necesarios
@@ -113,12 +111,10 @@ print (emm)
 
 
 ```
+
 En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso de adquisicion.
 
-
-
 ## Efecto de cantidad de ingestas en la formacion de memoria.
-
 
 ```{r ingestas, echo=FALSE}
 #Defino variable respuesta, Recuerda
@@ -130,17 +126,19 @@ Datos <- Datos %>%
 
 ###Gráfico de % Resp vs canti de ingestas, discriminando por tratamiento
 Vivos <- Datos %>%
-  filter( Muere == 0)
+  filter( Muere == 0, Tratamiento != "SIN OLOR")
 Respuesta_general <-Vivos %>%
+  filter(!is.na(Recuerda))%>%
   group_by(Tratamiento, Ingestas) %>%
   summarise(
     Responden = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 0),  	# Cuenta cuántos tienen LIO 24hs igual a 1
     Total = n_distinct(N),             	# Reemplaza "N" por el nombre correcto de la columna de ID única
     Porcentaje = (Responden / Total), # Calcula el porcentaje de respuesta
     .groups = "drop")
+print(Respuesta_general )
 ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, colour = Tratamiento)) +
   geom_point() + 
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) + 
+  #geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) + 
   labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
        x = "Cantidad de ingestas",
        y = "Porcentaje de respuesta al PER 24hs") +
@@ -166,17 +164,18 @@ ggplot(Ing, aes(x = as.factor(Ingestas), y = Probabilidad)) +
   theme_minimal()
 
 ```
+
 ```{r ModIngestas, echo=TRUE}
 #Modelo, VR: Recuerda 24 hs, VE: Cantidad de ingestas, VA: Tratamiento, nido, dia?
 
-Datos$Ingestas <- as.factor(Datos$Ingestas)
+Vivos$Ingestas <- as.factor(Vivos$Ingestas)
 MIng <- glmer(Recuerda ~ Ingestas + (1|Tratamiento)+ (1|Nido)+(1|Dia), 
-              data = Datos, 
+              data = Vivos, 
               family = binomial,
               control = glmerControl(optimizer = "bobyqa", 
                                      optCtrl = list(maxfun = 2e5)))
 summary (MIng)
-anova (MIng)
+Anova (MIng)
 contrastesMIng <- emmeans(MIng, pairwise ~ Ingestas, type = "link", adjust = "tukey")
 summary(contrastesMIng$contrasts)
 print (contrastesMIng)
@@ -188,8 +187,16 @@ print (contrastesMIng)
 Datos$Nido<- as.factor (Datos$Nido)
 Datos$Dia<- as.factor (Datos$Dia)
 Datos$Ingestas<- as.character (Datos$Ingestas)
-DatosMemoria <- Datos%>%
-  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas >= 2, Muere == 0)
+DatosMemoria <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 1, Muere == 0) %>%
+  group_by(Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+
+ggplot(DatosMemoria, aes(x = Tratamiento, y = prob)) +
+  geom_point(size = 3) +
+  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") +
+  theme_minimal()
+
 MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia), 
               data = DatosMemoria, 
               family = binomial) 
@@ -222,10 +229,41 @@ ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asym
   labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") + # Etiquetas de los ejes
   theme_minimal()
 
+###########################################
+DatosModelo2 <-Datos%>%
+  filter( Tratamiento != "SIN OLOR",Nido != "4", Ingestas > 0, Muere == 0)
+DatosModelo2$Tratamiento <- relevel(DatosModelo2$Tratamiento, ref = "SIN CNA")
+MMixtoNidoDia2 <- glmer(Recuerda ~ Tratamiento + (1|Nido)+ (1|Ingestas) + (1|Dia), data=DatosModelo2, family=binomial)
+summary(MMixtoNidoDia2)
+anova(MMixtoNidoDia2)
+isSingular(MMixtoNidoDia2) #Da True, la varianza explicad apor dia ya esta expklicada por optras variables del modelo, no aporta nada y complejiza el modelo. Descartamos esta variable aleatoria.
+
+summary (MMixtoNidoDia2) 
+
+# Obtener las medias marginales estimadas con intervalos de confianza
+emm2 <- emmeans(MMixtoNidoDia2, ~ Tratamiento, type = "response") %>% as.data.frame()
+print(emm2)
+contrasts <- contrast(emm2, method = "pairwise")
+summary(contrasts)
+# Graficar las probabilidades estimadas
+ggplot(emm2, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  theme_minimal() +
+  labs(y = "Probabilidad de memoria (estimada)", x = "Tratamiento") +
+  scale_fill_manual(values = c("SIN CNA" = "lightblue",
+                               "CAF" = "#E69138",
+                               "ARG" = "#8E7CC3",
+                               "CAF+ARG" = "#C27BA0",
+                               "2 CAF" = "orange",
+                               "2 ARG" = "purple",
+                               "2 CAF+ARG" = "#C27")) +
+  theme(legend.position = "none")
 
 ```
 
 # Supervivencia
+
 ```{r supervivencia, echo=TRUE}
 #Indice de supervivencia segun tratamiento cuando hubo al menos 2 ingestas
 Datos_filtrado <-Datos%>%
@@ -274,10 +312,8 @@ ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamie
   theme_minimal() +
   theme(legend.position = "none")
 ```
+
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
-
-
 
 ```{r Generalizacion, echo=TRUE}
 Generalizacion <- Datos_filtrado  %>%
@@ -323,14 +359,17 @@ contrasts <- contrast(em_means, method = "pairwise")
 summary(contrasts, infer = TRUE)
 
 em_means_resp <- summary(em_means, type = "response")
+
 ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamiento)) +
-  geom_col(width = 0.6, alpha = 0.6, color = "darkgreen") +  # Barras de fondo
+  geom_col(width = 0.6, alpha = 0.6) +  # Barras de fondo
   geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +  # Barras de error
   geom_point(size = 3, color = "black") +  # Punto de la media ajustada
-  labs(
-    x = "Tratamiento",
-    y = "Probabilidad ajustada de mortalidad"
-  ) +
+  labs(title = "Tasa de generalización a las 24hs",
+       x = "Tratamiento",
+       y = "Tasa de generalización") +
+  scale_fill_manual(values = c("CAF_ARG" = "darkgreen",
+                               "SIN_CNA_OLOR" = "lightblue")) +
   theme_minimal() +
-  theme(legend.position = "none")
+  theme(
+    text = element_text(size = 14))
 ```
