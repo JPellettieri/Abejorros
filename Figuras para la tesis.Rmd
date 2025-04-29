@@ -20,17 +20,22 @@ library(ggeffects)   # La vamos a utilizar para obtener (y graficar) los valores
 library(sjPlot)   
 # Analisis exploratorio integral
 #setwd("C:\Users\maria\OneDrive\Documentos\GitHub\Abejorros")
-
 #Datos <- read_excel("Datos abejorros CNA- Cafeina y Arginina (1).xlsx",col_names = TRUE,  sheet = "Integración")
+
+
 Datos <- read_excel("Datos abejorros Integrados dosisi simple y doble 19_3_2025.xlsx",col_names = TRUE,  sheet = "Integración")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
-  filter(Tratamiento != F)%>%
+  filter(Tratamiento !="F")%>%
   rowwise() %>%
   mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
+# Orden personalizado de los factores
+Datos$Tratamiento <- factor(Datos$Tratamiento, levels = c(
+  "SIN OLOR","SIN CNA", "ARG", "CAF", "CAF+ARG", "2 ARG", "2 CAF", "2 CAF+ARG"
+))
 ```
 
 ## GitHub Documents
@@ -43,7 +48,7 @@ This is an R Markdown format used for publishing markdown documents to GitHub. W
  # Paquetes necesarios
  library(tidyverse)
  
- # Manipulación para encontrar la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
+ #Busco la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
 DatosCurva <- Datos %>%
   filter(Tratamiento != "SIN OLOR", Tratamiento !=  "F", Nido!="4") %>%
   rowwise() %>%
@@ -101,32 +106,53 @@ curvas_aprendizaje %>%
 ```{r ModAdquisicion, echo=TRUE}
 #defino variable respuesta
 DatosCurva$Adquisicion <- ifelse(is.na(DatosCurva$T_A), 0, 1)
-
+DatosCurva$Tratamiento <- relevel(DatosCurva$Tratamiento, ref = "SIN CNA")
 MAdqui <- glmer(Adquisicion ~ Tratamiento + (1|Nido) + (1|Dia), data=DatosCurva, family=binomial)
 summary (MAdqui)
 anova (MAdqui)
 comparaciones <- emmeans(MAdqui, pairwise ~ Tratamiento, type = "link", adjust = "tukey")
 summary(comparaciones$contrasts)
-print (emm)
+print (comparaciones)
 
 
 ```
 
 En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso de adquisicion.
 
+## Efecto del tratamiento sobre la cantidad de ingestas
+```{r ingestas, echo=FALSE}
+
+###Gráfico de promedio de ingestas, discriminando por tratamiento
+Datos %>%
+  group_by(Tratamiento) %>%
+  summarise(Ingesta_promedio = mean(Ingestas, na.rm = TRUE)) %>%
+  ggplot(aes(x = Tratamiento, y = Ingesta_promedio, fill = Tratamiento)) +
+  geom_col(color = "black") +
+  labs(
+    title = "Ingesta promedio en función del tratamiento",
+    x = "Tratamiento",
+    y = "Ingestas promedio"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+```
+
 ## Efecto de cantidad de ingestas en la formacion de memoria.
 
 ```{r ingestas, echo=FALSE}
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
-  filter(Tratamiento != F)%>%
   rowwise() %>%
   mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0)) 
   
 
 ###Gráfico de % Resp vs canti de ingestas, discriminando por tratamiento
 Vivos <- Datos %>%
-  filter( Muere == 0, Tratamiento != "SIN OLOR")
+  filter( Muere == 0)
 Respuesta_general <-Vivos %>%
   filter(!is.na(Recuerda))%>%
   group_by(Tratamiento, Ingestas) %>%
@@ -183,20 +209,109 @@ print (contrastesMIng)
 
 ```
 
+#Cantidad de ingestas totales duarante el entrenamiento en funcion del tratamiento
+```{r IngTratamiento, echo=TRUE}
+ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, fill = Tratamiento)) + 
+ geom_col( color = "black",  position = position_dodge()) +   scale_fill_manual(values = c(
+    "SIN OLOR" = "black","SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  )) +
+  labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
+       x = "Cantidad de ingestas",
+       y = "Porcentaje de respuesta al PER 24hs") +
+  theme(text = element_text(size = 14))
+
+```
+
+
+# Respuesta al PER a las 24hs en funcion del tratamiento
+1) Proporcion que REP 24hs en funcion del tratamiento, sin filtro de ingestas.
 ```{r PERTratamiento, echo=TRUE}
 Datos$Nido<- as.factor (Datos$Nido)
 Datos$Dia<- as.factor (Datos$Dia)
-Datos$Ingestas<- as.character (Datos$Ingestas)
+Datos$Ingestas<- as.character (Datos$Ingestas) 
 DatosMemoria <- Datos %>%
-  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 1, Muere == 0) %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Muere == 0,!is.na(Recuerda)) %>%
   group_by(Tratamiento) %>%
   summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoria)
+ggplot(DatosMemoria, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("1) REP 24hs en funcion del tratamiento")+
+  theme_minimal()+
+  ylim(0, NA)
 
-ggplot(DatosMemoria, aes(x = Tratamiento, y = prob)) +
-  geom_point(size = 3) +
-  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") +
-  theme_minimal()
 
+
+
+```
+2) filtro a menos de 4 ingestas (1,2 y 3) 
+```{r PERpocasIngests, echo=TRUE}
+#Hago lo mismo pero con pocas ingestas
+DatosMemoriaPocasIng <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Ingestas < 4, Muere == 0,!is.na(Recuerda)) %>%
+  group_by(Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoriaPocasIng)
+ggplot(DatosMemoriaPocasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("2) REP 24hs en funcion del tratamiento con menos de 4 ingestas")+
+  theme_minimal()+
+  ylim(0, NA)
+```
+2.1) PEr porcas ingestas agurpando por tratamiento con o sin CNA
+```{r PERpocasIngests, echo=TRUE}
+#Hago lo mismo pero con pocas ingestas
+DatosMemoriaPocasIngAgrupado <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Ingestas < 4, Muere == 0,!is.na(Recuerda)) %>%
+  mutate(Grupo_Tratamiento = case_when(
+      Tratamiento %in% c("CAF", "ARG", "CAF+ARG", "2 CAF", "2 ARG", "2 CAF+ARG") ~ "CAF_ARG",
+      Tratamiento %in% c("SIN CNA") ~ "SIN_CNA")) %>%
+  group_by(Grupo_Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoriaPocasIngAgrupado )
+ggplot(DatosMemoriaPocasIngAgrupado , aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", 
+    "CAF_ARG" = "#AE81E4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("2.1) REP 24hs en funcion del tratamiento (agrupado) con menos de 4 ingestas")+
+  theme_minimal()+
+  ylim(0, NA)
+```
+
+ 
+3) Filtro a mas de 4 (5 y 6 ingestas)
+```{r PERMuchasIngests, echo=TRUE}
+#Hago lo mismo pero con pocas ingestas
+DatosMemoriaMuchasIng <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 4, Muere == 0,!is.na(Recuerda)) %>%
+  group_by(Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoriaMuchasIng)
+ggplot(DatosMemoriaMuchasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("3) REP 24hs en funcion del tratamiento con mas de 4 ingestas")+
+  theme_minimal()+
+  ylim(0, NA)
+```
+
+  
+### Modelos para evaluar per en funcion del tratamiento (sin filtro de ingestas)  
+```{r PERModelo, echo=TRUE}
 MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia), 
               data = DatosMemoria, 
               family = binomial) 
