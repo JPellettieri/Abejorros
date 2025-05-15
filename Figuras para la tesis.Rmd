@@ -120,6 +120,7 @@ print (comparaciones)
 En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso de adquisicion.
 
 ## Efecto del tratamiento sobre la cantidad de ingestas
+
 ```{r ingestas, echo=FALSE}
 
 ###Gráfico de ingestas, discriminando por tratamiento
@@ -211,6 +212,7 @@ print (contrastesMIng)
 ```
 
 #Cantidad de ingestas totales duarante el entrenamiento en funcion del tratamiento
+
 ```{r IngTratamiento, echo=TRUE}
 ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, fill = Tratamiento)) + 
  geom_col( color = "black",  position = position_dodge()) +   scale_fill_manual(values = c(
@@ -225,9 +227,10 @@ ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, fill = Tratamien
 
 ```
 
-
 # Respuesta al PER a las 24hs en funcion del tratamiento
-1) Proporcion que REP 24hs en funcion del tratamiento, sin filtro de ingestas.
+
+1)  Proporcion que REP 24hs en funcion del tratamiento, sin filtro de ingestas.
+
 ```{r PERTratamiento, echo=TRUE}
 Datos$Nido<- as.factor (Datos$Nido)
 Datos$Dia<- as.factor (Datos$Dia)
@@ -251,7 +254,9 @@ ggplot(DatosMemoria, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
 
 
 ```
-2) filtro a menos de 4 ingestas (1,2 y 3) 
+
+2)  filtro a menos de 4 ingestas (1,2 y 3)
+
 ```{r PERpocasIngests, echo=TRUE}
 #Hago lo mismo pero con pocas ingestas
 DatosMemoriaPocasIng <- Datos %>%
@@ -269,7 +274,9 @@ ggplot(DatosMemoriaPocasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento))
   theme_minimal()+
   ylim(0, NA)
 ```
+
 2.1) PEr porcas ingestas agurpando por tratamiento con o sin CNA
+
 ```{r PERpocasIngests, echo=TRUE}
 #Hago lo mismo pero con pocas ingestas
 DatosMemoriaPocasIngAgrupado <- Datos %>%
@@ -290,8 +297,8 @@ ggplot(DatosMemoriaPocasIngAgrupado , aes(x = Grupo_Tratamiento, y = prob, fill 
   ylim(0, NA)
 ```
 
- 
-3) Filtro a mas de 4 (5 y 6 ingestas)
+3)  Filtro a mas de 4 (5 y 6 ingestas)
+
 ```{r PERMuchasIngests, echo=TRUE}
 #Hago lo mismo pero con pocas ingestas
 DatosMemoriaMuchasIng <- Datos %>%
@@ -310,8 +317,8 @@ ggplot(DatosMemoriaMuchasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento)
   ylim(0, NA)
 ```
 
-  
-### Modelos para evaluar per en funcion del tratamiento (sin filtro de ingestas)  
+### Modelos para evaluar per en funcion del tratamiento (sin filtro de ingestas)
+
 ```{r PERModelo, echo=TRUE}
 MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia), 
               data = DatosMemoria, 
@@ -381,6 +388,7 @@ ggplot(emm2, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
 # Supervivencia
 
 Supervivencia en funcion de cantidad de ingestas
+
 ```{r supervivenciaIng, echo=TRUE}
 SupVsIng <- Datos %>%
   group_by(Ingestas) %>%
@@ -398,6 +406,26 @@ ggplot(SupVsIng, aes(x = Ingestas, y = Supervivencia)) +
   ) +
   theme_minimal()
 ```
+
+```{r ModSupervivenciaIngTrat, echo=TRUE}
+# Asegurarse de que Muere sea numérica
+Datos$Muere <- as.numeric(Datos$Muere)
+
+# Ajustar el modelo logístico
+modelo_ingestas <- glm(Muere ~ as.factor(Ingestas), data = Datos, family = binomial)
+
+# Resumen del modelo
+summary(modelo_ingestas)
+
+#Tengo un caso de separacion perfecta que me rompe el modelo! lo hago de nuevo con otro paquete
+
+library(logistf)
+modelo_firth <- logistf(Muere ~ as.factor(Ingestas), data = Datos)
+summary(modelo_firth) # todos difieren sig de 0 ingestas, no puedo aplicar tukey con este modelo :( 
+
+
+```
+
 ```{r supervivenciaIngTrat, echo=TRUE}
 SupVsIngTrat <- Datos %>%
   mutate(Grupo_Tratamiento = case_when(
@@ -423,15 +451,17 @@ ggplot(SupVsIngTrat, aes(x = factor(Ingestas), y = Supervivencia, fill = Grupo_T
     fill = "Grupo de tratamiento"
   ) +
   theme_minimal()
+
 ```
 
 Supervivencia en funcion del peso
+
 ```{r supervivenciaPeso, echo=TRUE}
+
+str(Datos$Peso)
 Datos$Peso <- as.numeric((Datos$Peso))
 summary (Datos$Peso)
-Datos <- Datos %>%
-  filter(!is.na(Muere), !is.na(Peso)) %>%
-  mutate(QuintilPeso = ntile(Peso, 5))
+Datos$QuintilPeso<-ntile(Datos$Peso, 3) #poner 5 si quiero los quintiles
 
 SuperPeso <- Datos %>%
   group_by(QuintilPeso) %>%
@@ -444,6 +474,7 @@ SuperPeso <- Datos %>%
     Supervivencia = round(Supervivencia * 100, 1),
     QuintilPeso = as.factor(QuintilPeso)
   )
+print(SuperPeso)
 
 ggplot(SuperPeso, aes(x = QuintilPeso, y = Supervivencia)) +
   geom_col(fill = "#FFD966") +
@@ -456,34 +487,25 @@ ggplot(SuperPeso, aes(x = QuintilPeso, y = Supervivencia)) +
   ) +
   theme_minimal()
 ```
+
 ```{r ModSupPEso, echo=TRUE}
-SuperPeso <- Datos %>%
-  summarise(
-    QuintilPeso = as.factor(QuintilPeso))
+# Asegurarse de que Muere sea numérica
+Datos$Muere <- as.numeric(Datos$Muere)
 
-modeloSup <- glm(Muere~ Grupo_QuintilPeso, 
-              data = Datos, 
-              family = binomial)
-summary(modeloSup)
-Anova(modeloSup)
-em_means <- emmeans(modeloSup, ~ Grupo_Tratamiento)  # esta es la forma correcta
-contrasts <- contrast(em_means, method = "pairwise")
-summary(contrasts, infer = TRUE)
+# Ajustar modelo de regresión logística
+MSupPeso <- glm(Muere ~ as.factor(QuintilPeso), data = Datos, family = binomial)
 
-em_means_resp <- summary(em_means, type = "response")
-ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamiento)) +
-  geom_col(width = 0.6, alpha = 0.6, color = "lightblue") +  # Barras de fondo
-  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +  # Barras de error
-  geom_point(size = 3, color = "black") +  # Punto de la media ajustada
-  labs(
-    x = "Tratamiento",
-    y = "Probabilidad ajustada de mortalidad"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "none")
+# Ver resumen del modelo
+summary(MSupPeso)
+
+# Contrastes por pares si hay más de 2 niveles
+library(emmeans)
+emmeans(MSupPeso, pairwise ~ QuintilPeso, type = "response")
+
 ```
 
 Supervivencia segun tratamiento
+
 ```{r supervivenciaTrat, echo=TRUE}
 #Indice de supervivencia segun tratamiento cuando hubo al menos 2 ingestas
 Datos_filtrado <-Datos%>%
