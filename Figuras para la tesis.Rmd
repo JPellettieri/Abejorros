@@ -1,6 +1,11 @@
 ---
-title: "Analisis de Datos: EFECTOS COMBINADOS DE COMPUESTOS SECUNDARIOS PRESENTES EN NÉCTARES SOBRE LA FORMACIÓN DE LA MEMORIA A LARGO TÉRMINO EN EL ABEJORRO NATIVO Bombus pauloensis"
-output: github_document
+title: 'Analisis de Datos: EFECTOS COMBINADOS DE COMPUESTOS SECUNDARIOS PRESENTES
+  EN NÉCTARES SOBRE LA FORMACIÓN DE LA MEMORIA A LARGO TÉRMINO EN EL ABEJORRO NATIVO
+  Bombus pauloensis'
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -29,7 +34,7 @@ summary (Datos$Tratamiento)
 
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
-  filter(Tratamiento !="F")%>%
+  filter(Tratamiento !="F", Nido != "4")%>%
   rowwise() %>%
   mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
 # Orden personalizado de los factores
@@ -37,10 +42,7 @@ Datos$Tratamiento <- factor(Datos$Tratamiento, levels = c(
   "SIN OLOR","SIN CNA", "ARG", "CAF", "CAF+ARG", "2 ARG", "2 CAF", "2 CAF+ARG"
 ))
 ```
-
-## GitHub Documents
-
-This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
+#Analisis exploratorio
 
 # Curva de adquisicion: Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de que les ofrezca la recompenza.
 
@@ -121,7 +123,7 @@ En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso d
 
 ## Efecto del tratamiento sobre la cantidad de ingestas
 
-```{r ingestas, echo=FALSE}
+```{r ingestas1, echo=FALSE}
 
 ###Gráfico de ingestas, discriminando por tratamiento
 IngestaPorTratamiento <- Datos %>%
@@ -145,7 +147,7 @@ ggplot(IngestaPorTratamiento, aes(x = factor(Ingestas), y = n, fill = Tratamient
 
 ## Efecto de cantidad de ingestas en la formacion de memoria.
 
-```{r ingestas, echo=FALSE}
+```{r ingestas2, echo=FALSE}
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
   rowwise() %>%
@@ -257,7 +259,7 @@ ggplot(DatosMemoria, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
 
 2)  filtro a menos de 4 ingestas (1,2 y 3)
 
-```{r PERpocasIngests, echo=TRUE}
+```{r PERpocasIngestas1, echo=TRUE}
 #Hago lo mismo pero con pocas ingestas
 DatosMemoriaPocasIng <- Datos %>%
   filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Ingestas < 4, Muere == 0,!is.na(Recuerda)) %>%
@@ -277,7 +279,7 @@ ggplot(DatosMemoriaPocasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento))
 
 2.1) PEr porcas ingestas agurpando por tratamiento con o sin CNA
 
-```{r PERpocasIngests, echo=TRUE}
+```{r PERpocasIngestas2, echo=TRUE}
 #Hago lo mismo pero con pocas ingestas
 DatosMemoriaPocasIngAgrupado <- Datos %>%
   filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Ingestas < 4, Muere == 0,!is.na(Recuerda)) %>%
@@ -320,6 +322,8 @@ ggplot(DatosMemoriaMuchasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento)
 ### Modelos para evaluar per en funcion del tratamiento (sin filtro de ingestas)
 
 ```{r PERModelo, echo=TRUE}
+DatosMemoria<- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Muere == 0,!is.na(Recuerda)) 
 MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia), 
               data = DatosMemoria, 
               family = binomial) 
@@ -327,9 +331,8 @@ MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia),
 ## Supuestos
 simm1 <- simulateResiduals(fittedMod = MMixtoNido) # , refit = T 
 plot(simm1)
-plotResiduals(simm1, DatosMemoria$Tratamiento)
 
-testDispersion(simm1) # dio re lindo el DHARMA
+testDispersion(simm1) # DHARMA
 
 ### prueba de shapiro
 #intercept_efectos <- alfai$Nido$(Intercept)
@@ -621,7 +624,7 @@ ggplot(em_means_df, aes(x = QuintilPeso, y = Respuesta)) +
   theme_minimal()
 
 ```
-```{r supervivenciaIng, echo=TRUE}
+```{r supervivenciaIng1, echo=TRUE}
 # Crear terciles (3 grupos de peso)
 Datos$TercilPeso <- ntile(Datos$Peso, 3)
 Datos$TercilPeso <- factor(Datos$TercilPeso, labels = c("Bajo", "Medio", "Alto"))
@@ -666,7 +669,7 @@ print(em_ingesta)
 
 Supervivencia en funcion de cantidad de ingestas
 
-```{r supervivenciaIng, echo=TRUE}
+```{r supervivenciaIng2, echo=TRUE}
 SupVsIng <- Datos %>%
   group_by(Ingestas) %>%
   summarise(Sobreviven = sum(Muere == "0" ), 
