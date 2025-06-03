@@ -34,7 +34,7 @@ summary (Datos$Tratamiento)
 
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
-  filter(Tratamiento !="F", Nido != "4")%>%
+  filter(Tratamiento !="F")%>%
   rowwise() %>%
   mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
 # Orden personalizado de los factores
@@ -406,7 +406,7 @@ MMemoria<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia),
 ## Supuestos
 simm1 <- simulateResiduals(fittedMod = MMemoria) # , refit = T 
 plot(simm1)
-plotResiduals(simm1, Aprenden$Tratamiento)
+#plotResiduals(simm1, Aprenden$Tratamiento)
 
 testDispersion(simm1) # dio re lindo el DHARMA
 
@@ -546,7 +546,8 @@ print(AprendPeso)
 Datos$A <- as.numeric(Datos$A)
 
 # Ajustar modelo logístico
-MAprePeso <- glm(A_num ~ as.factor(QuintilPeso), data = Datos, family = binomial)
+MAprePeso <-glmer(A ~ as.factor(QuintilPeso) + (1|Tratamiento) + (1|Nido), 
+                data = Datos, family = binomial)
 summary(MAprePeso)
 
 # Estimar medias marginales (en escala de respuesta = porcentaje)
@@ -568,8 +569,8 @@ ggplot(em_means_df, aes(x = QuintilPeso, y = Aprendizaje)) +
   geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), width = 0.2) +
   labs(
     x = "Peso (tercil)",
-    y = "Aprendizaje (%)",
-    title = "Aprendizaje según quintil de peso"
+    y = "Probabilidad de adquisición estimada",
+    title = "Probabilidad de adquisicion estimada según peso del abejorro"
   ) +
   theme_minimal()
 
@@ -577,6 +578,129 @@ ggplot(em_means_df, aes(x = QuintilPeso, y = Aprendizaje)) +
 comparaciones <- pairs(em_means, adjust = "tukey")
 print(comparaciones)
 ```
+
+```{r exploratoriopeso, echo=TRUE}
+# Calcular medias por Nido y Temporada
+medias <- Datos %>%
+  group_by(Nido, Estacion) %>%
+  summarise(media_peso = mean(Peso, na.rm = TRUE), .groups = "drop")
+
+# Gráfico con densidad + línea de media
+ggplot(Datos, aes(x = Peso, fill = Estacion)) +
+  geom_density(alpha = 0.5, color = "black") +
+  geom_vline(data = medias, aes(xintercept = media_peso, color = Estacion), 
+             linetype = "dashed", size = 0.8, show.legend = FALSE) +
+  facet_wrap(~ Nido, scales = "free_y", ncol = 1) +
+  theme_minimal(base_size = 12) +
+  labs(title = "Distribución del peso por nido y temporada",
+       x = "Peso del abejorro", y = "Densidad") +
+  scale_fill_brewer(palette = "Set2") +
+  scale_color_brewer(palette = "Set2")
+```
+```{r Pesotiempo, echo=TRUE}
+# Asegurate de que la variable de fecha esté en formato Date
+Datos <- Datos %>%
+  mutate(Fecha = as.Date(Fecha))  # Cambiar 'Fecha' al nombre real de tu columna
+
+# Crear nueva variable: días desde la primera captura en cada nido
+Datos <- Datos %>%
+  group_by(Nido) %>%
+  mutate(DiasDesdeInicio = as.numeric(Fecha - min(Fecha))) %>%
+  ungroup()
+  ggplot(Datos, aes(x = DiasDesdeInicio, y = Peso, color = Estacion)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~Nido, scales = "free_y") +
+  labs(
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Estación",
+    title = "Evolución del peso de abejorros a lo largo del tiempo por nido"
+  ) +
+  theme_minimal()
+
+ggplot(Datos, aes(x = DiasDesdeInicio, y = Peso, color = as.factor(Nido))) +
+  geom_point(alpha = 0.4, size = 1.5) +  # puntos individuales
+  geom_smooth(method = "glm", se = FALSE, size = 1) + 
+  labs(
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Nido",
+    title = "Tendencias del peso de abejorros por estación"
+  ) +
+  theme_minimal()
+
+library(mgcv)
+
+ggplot(Datos, aes(x = DiasDesdeInicio, y = Peso, color = as.factor(Nido))) +
+  # Puntos originales
+  geom_point(alpha = 0.5, size = 1.5) + geom_smooth(method = "glm", se = FALSE, size = 1) +
+  # Etiquetas y títulos
+  labs(
+    title = "Evolución del peso de abejorros",
+    subtitle = "Tendencias suavizadas por nido",
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Nido"
+  ) +
+  # Tema clásico para publicación
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 13),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 11)
+  )
+geom_smooth(aes(group = 1), color = "black", method = "glm", formula = y ~ s(x, bs = "cs"),
+            size = 1.2)
+
+#------------------------
+  # Filtrar datos válidos
+Datos_peso_filt <- Datos %>%
+  filter(!is.na(Peso))
+
+ggplot(Datos_peso_filt, aes(x = DiasDesdeInicio, y = Peso, color = as.factor(Nido))) +
+  # Puntos originales
+  geom_point(alpha = 0.5, size = 1.5) +
+
+  # Ajuste glm polinómico por nido
+  geom_smooth(method = "glm", formula = y ~ x, se = FALSE, size = 1) +
+
+  # Títulos y etiquetas
+  labs(
+    title = "Evolución del peso de abejorros",
+    subtitle = "MLGM con nido como variable de efecto aleatorio",
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Nido"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 13),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 11)
+  )+
+  geom_smooth(aes(group = 1), method = "glm", formula = y ~ x,
+              color = "black", size = 1.2, linetype = "dashed", se = FALSE)
+
+```
+
+```{r Modpesotiempo, echo=TRUE}
+# 1. Ajustar modelo global
+Modpesotiempo <-lmer(Peso ~ DiasDesdeInicio + (1|Nido), data = Datos_peso_filt)
+summary(Modpesotiempo)
+summary(lmerTest::lmer(Peso ~ DiasDesdeInicio + (1 | Nido), data = Datos_peso_filt))
+
+```
+Por cada día que pasa desde la primera captura, el peso promedio de los abejorros aumenta 0.00076 gramos (≈0.76 mg).
+Este aumento es estadísticamente significativo con un p<0.001.
 
 ```{r RespuestaPeso, echo=TRUE}
 RespPeso <- Datos %>%
@@ -599,7 +723,7 @@ print(RespPeso)
 Datos$Recuerda <- as.numeric(Datos$Recuerda)
 
 # Ajustar modelo logístico
-MRecPeso <- glm(Recuerda ~ as.factor(QuintilPeso), data = Datos, family = binomial)
+MRecPeso <- glmer(Recuerda ~ as.factor(QuintilPeso)+(1|Nido), data = Datos, family = binomial)
 summary(MRecPeso)  
 anova(MRecPeso)    #N/S
 
@@ -741,7 +865,7 @@ Supervivencia en funcion del peso
 str(Datos$Peso)
 Datos$Peso <- as.numeric((Datos$Peso))
 summary (Datos$Peso)
-Datos$QuintilPeso<-ntile(Datos$Peso, 3) #poner 5 si quiero los quintiles
+Datos$TercilPeso<-ntile(Datos$Peso, 3) #poner 5 si quiero los quintiles
 
 SuperPeso <- Datos %>%
   group_by(QuintilPeso) %>%
@@ -761,9 +885,9 @@ ggplot(SuperPeso, aes(x = QuintilPeso, y = Supervivencia)) +
   geom_text(aes(label = Supervivencia), vjust = -0.5, size = 3.5) +
   scale_y_continuous(labels = function(x) paste0(x, "%"), limits = c(0, 105)) +
   labs(
-    x = "Quintil de peso",
+    x = "Peso",
     y = "Supervivencia (%)",
-    title = "Supervivencia según quintiles de peso"
+    title = "Supervivencia según peso"
   ) +
   theme_minimal()
 ```
@@ -783,6 +907,65 @@ library(emmeans)
 emmeans(MSupPeso, pairwise ~ QuintilPeso, type = "response")
 
 ```
+
+#VA Nido
+```{r AprendizajeNido, echo=TRUE}
+
+AprendNido <- Datos %>%
+  filter(!is.na(A)) %>%  # Ignora los NA en A
+  group_by(Nido) %>%
+  summarise(
+    Aprenden = sum(A == "1"),
+    Total = n(),
+    Aprendizaje = Aprenden / Total
+  ) %>%
+  mutate(
+    Aprendizaje = round(Aprendizaje * 100, 1),
+    Nido = as.factor(Nido)
+  )
+
+print(AprendNido)
+
+##Modelo
+# Asegurarse de que aprende sea numérica
+Datos$A <- as.numeric(Datos$A)
+
+# Ajustar modelo logístico
+MAprePeso <-glmer(A ~ as.factor(QuintilPeso) + (1|Tratamiento) + (1|Nido), 
+                data = Datos, family = binomial)
+summary(MAprePeso)
+
+# Estimar medias marginales (en escala de respuesta = porcentaje)
+em_means <- emmeans(MAprePeso, ~ QuintilPeso, type = "response")
+em_means_df <- as.data.frame(em_means)
+print(em_means_df)
+# Renombrar columna para facilitar el gráfico
+colnames(em_means_df)[colnames(em_means_df) == "prob"] <- "Aprendizaje"
+
+# Convertir Aprendizaje a porcentaje
+em_means_df$Aprendizaje <- round(em_means_df$Aprendizaje * 100, 1)
+em_means_df$QuintilPeso <- as.factor(em_means_df$QuintilPeso)
+
+# Gráfico
+ggplot(em_means_df, aes(x = QuintilPeso, y = Aprendizaje)) +
+  geom_col(fill = "purple") +
+  geom_text(aes(label = paste0(Aprendizaje, "%")), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), limits = c(0, 105)) +
+  geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), width = 0.2) +
+  labs(
+    x = "Peso (tercil)",
+    y = "Probabilidad de adquisición estimada",
+    title = "Probabilidad de adquisicion estimada según peso del abejorro"
+  ) +
+  theme_minimal()
+
+# Comparaciones post hoc entre niveles de Peso con ajuste de Tukey
+comparaciones <- pairs(em_means, adjust = "tukey")
+print(comparaciones)
+```
+
+
+
 
 Supervivencia segun tratamiento
 
