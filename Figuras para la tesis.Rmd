@@ -32,6 +32,8 @@ Datos <- read_excel("Datos abejorros Integrados dosisi simple y doble 19_3_2025.
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
+#De los 447 capturados 12 ind. murieron antes de ser entrenados.
+
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
   filter(Tratamiento !="F")%>%
@@ -41,8 +43,30 @@ Datos <- Datos %>%
 Datos$Tratamiento <- factor(Datos$Tratamiento, levels = c(
   "SIN OLOR","SIN CNA", "ARG", "CAF", "CAF+ARG", "2 ARG", "2 CAF", "2 CAF+ARG"
 ))
+
+
+#Defino variable Aprende (A) Recuerda y generaliza
+Datos <- Datos %>%
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0),
+         Generaliza = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 1, 1, 0),
+         A = ifelse(rowSums(across(starts_with("E"), ~ . == "A")) > 0, 1, 0)) 
 ```
 #Analisis exploratorio
+```{r exproatorio, echo=FALSE}
+#Porcentaje que tomó el tratamiento completo
+sum(Datos$Ingestas == 6, na.rm = TRUE) / nrow(Datos) * 100
+#cuantos individuos corresponden a cada n de ingestas
+table(Datos$Ingestas)
+
+#Procentaje de supervivencia
+sum(Datos$Muere == 0, na.rm = TRUE) / sum(!is.na(Datos$Muere)) * 100
+
+table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$A[Datos$Ingestas != 0])
+
+table(Datos$Tratamiento[Datos$Ingestas != 0 & Datos$Muere != 1], Datos$Recuerda[Datos$Ingestas != 0 & Datos$Muere != 1])
+table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$Muere[Datos$Ingestas != 0])
+```
 
 # Curva de adquisicion: Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de que les ofrezca la recompenza.
 
@@ -238,7 +262,7 @@ Datos$Nido<- as.factor (Datos$Nido)
 Datos$Dia<- as.factor (Datos$Dia)
 Datos$Ingestas<- as.character (Datos$Ingestas) 
 DatosMemoria <- Datos %>%
-  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Muere == 0,!is.na(Recuerda)) %>%
+  filter(Tratamiento != "SIN OLOR", Ingestas > 0, Muere == 0,!is.na(Recuerda)) %>%
   group_by(Tratamiento) %>%
   summarise(prob = mean(Recuerda) * 100, n = n())
 print(DatosMemoria)
@@ -931,31 +955,24 @@ print(AprendNido)
 Datos$A <- as.numeric(Datos$A)
 
 # Ajustar modelo logístico
-MAprePeso <-glmer(A ~ as.factor(QuintilPeso) + (1|Tratamiento) + (1|Nido), 
+MApreNido <-glmer(A ~ as.factor(Nido) + (1|Tratamiento), 
                 data = Datos, family = binomial)
-summary(MAprePeso)
+summary(MApreNido)
 
 # Estimar medias marginales (en escala de respuesta = porcentaje)
-em_means <- emmeans(MAprePeso, ~ QuintilPeso, type = "response")
+library(emmeans)
+em_means <- emmeans(MApreNido, ~ Nido, type = "response")
 em_means_df <- as.data.frame(em_means)
 print(em_means_df)
-# Renombrar columna para facilitar el gráfico
-colnames(em_means_df)[colnames(em_means_df) == "prob"] <- "Aprendizaje"
-
-# Convertir Aprendizaje a porcentaje
-em_means_df$Aprendizaje <- round(em_means_df$Aprendizaje * 100, 1)
-em_means_df$QuintilPeso <- as.factor(em_means_df$QuintilPeso)
 
 # Gráfico
-ggplot(em_means_df, aes(x = QuintilPeso, y = Aprendizaje)) +
+ggplot(em_means_df, aes(x = Nido, y = prob)) +
   geom_col(fill = "purple") +
-  geom_text(aes(label = paste0(Aprendizaje, "%")), vjust = -0.5, size = 3.5) +
-  scale_y_continuous(labels = function(x) paste0(x, "%"), limits = c(0, 105)) +
-  geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), width = 0.2) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
   labs(
-    x = "Peso (tercil)",
+    x = "Nido",
     y = "Probabilidad de adquisición estimada",
-    title = "Probabilidad de adquisicion estimada según peso del abejorro"
+    title = "Probabilidad de adquisicion estimada según Nido"
   ) +
   theme_minimal()
 
