@@ -935,8 +935,10 @@ emmeans(MSupPeso, pairwise ~ QuintilPeso, type = "response")
 #VA Nido
 ```{r AprendizajeNido, echo=TRUE}
 
+table(Datos$Nido [ Datos$Muere != 0])
+
 AprendNido <- Datos %>%
-  filter(!is.na(A)) %>%  # Ignora los NA en A
+  filter(!is.na(A), Ingestas != 0) %>%  # Ignora los NA en A
   group_by(Nido) %>%
   summarise(
     Aprenden = sum(A == "1"),
@@ -981,7 +983,39 @@ comparaciones <- pairs(em_means, adjust = "tukey")
 print(comparaciones)
 ```
 
+```{r RecuerdaNido, echo=TRUE}
 
+RecuerdaNido <- Datos %>%
+  filter(!is.na(Recuerda), Ingestas != 0, A==1) %>%
+  group_by(Nido) %>%
+  summarise(
+    Recuerdan = sum(Recuerda == "1"),
+    Total = n(),
+    Recuerdo = Recuerdan / Total
+  ) %>%
+  mutate(
+    Recuerdo = round(Recuerdo * 100, 1),
+    Nido = as.factor(Nido)
+  )
+
+print(RecuerdaNido)
+
+```
+
+```{r MuereNido, echo=TRUE}
+
+MuereNido <- Datos %>%
+  filter(!is.na(Muere), Ingestas != 0) %>%
+  group_by(Nido) %>%
+  summarise(
+    Mueren = sum(Muere == "1"),
+    Total = n(),
+    Mortalidad = Mueren / Total
+  )
+
+print(MuereNido)
+
+```
 
 
 Supervivencia segun tratamiento
