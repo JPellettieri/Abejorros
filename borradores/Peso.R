@@ -127,3 +127,9 @@ ggplot(predicciones, aes(x = Peso, y = predicted, color=Tratamiento)) +
 anova(MMixto)
 #las diferencias no son sig pero hay una tendencia consistente en todos los tratamientos, la varianza amenta mucho a pasando el peso promedio.
 
+# installing/loading the package:
+if(!require(installr)) {
+  install.packages("installr"); require(installr)} #load / install+load installr
+
+# using the package:
+updateR()

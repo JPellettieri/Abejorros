@@ -63,22 +63,25 @@ library(sjPlot)      # Alternativa para ggeffcets y grafico de efectos aleatorio
 install.packages("lme4")
 
 #Cargo datos
+#setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
+#Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
+#Datos$Tratamiento<- as.factor(Datos$Tratamiento)
+#summary (Datos$Tratamiento) # para ver el N de cada tratamiento
+#Datos$Nido<- as.factor(Datos$Nido)
 setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
-Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
+Datos <- read_excel("Datos abejorros CNA-12-03-2025.xlsx",col_names = TRUE,  sheet = "dosis doble")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
-summary (Datos$Tratamiento) # para ver el N de cada tratamiento
-Datos$Nido<- as.factor(Datos$Nido)
-
+summary (Datos$Tratamiento)
 
 ########### Filtrado de datos ###############
 # Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
-Datos <- Datos %>%
-  rowwise() %>%
-  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
+#Datos <- Datos %>%
+#  rowwise() %>%
+#  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
 
 # Filtrar para los que tomaron al menos 3 veces y sobrevivieron. "Criterio de experto".
 Filt_Cond_Sup_Esp <- Datos %>%
-  filter(Condicionamiento >= 3, Muere == 0)
+  filter(Condicionamiento >= 2, Muere == 0)
 
 #Analisis exploratorio cantidad de tomas y memoria a las 24 hs
 DatosPorCondicionamiento <- DatosMemoria %>%

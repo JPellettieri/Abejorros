@@ -5,19 +5,19 @@ library(readxl)
 
 #Cargo datos
 setwd("F:/Juli/Documents/Abejorros y Abejas/Abejorros")
-Datos <- read_excel("Datos prueba.xlsx",col_names = TRUE,  sheet = "Limpio")
+Datos <- read_excel("Datos abejorros CNA-12-03-2025.xlsx",col_names = TRUE,  sheet = "dosis doble")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
 # Contar el número de veces que los abejorros tomaron la recompensa (T) en las exposiciones (E1 a E6) (o aprendieron "A")
-Datos <- Datos %>%
-  rowwise() %>%
-  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
+#Datos <- Datos %>%
+#  rowwise() %>%
+#  mutate(Condicionamiento = sum(c_across(E1:E6) == "T" | c_across(E1:E6) == "A"))
 
 # Filtrar para eliminar los registros con menos de 3 veces tomando la recompensa
 Datos_filtrado <-Datos%>%
-  filter(Condicionamiento >= 3)
-
+  filter(Ingestas >= 2)
+summary (Datos_filtrado$Tratamiento)
 
 # Calcular el índice de supervivencia según el tratamiento
 Supervivencia <- Datos_filtrado %>%

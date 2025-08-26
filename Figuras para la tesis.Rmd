@@ -1,6 +1,11 @@
 ---
-title: "Analisis de Datos: EFECTOS COMBINADOS DE COMPUESTOS SECUNDARIOS PRESENTES EN NÉCTARES SOBRE LA FORMACIÓN DE LA MEMORIA A LARGO TÉRMINO EN EL ABEJORRO NATIVO Bombus pauloensis"
-output: github_document
+title: 'Analisis de Datos: EFECTOS COMBINADOS DE COMPUESTOS SECUNDARIOS PRESENTES
+  EN NÉCTARES SOBRE LA FORMACIÓN DE LA MEMORIA A LARGO TÉRMINO EN EL ABEJORRO NATIVO
+  Bombus pauloensis'
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -20,34 +25,65 @@ library(ggeffects)   # La vamos a utilizar para obtener (y graficar) los valores
 library(sjPlot)   
 # Analisis exploratorio integral
 #setwd("C:\Users\maria\OneDrive\Documentos\GitHub\Abejorros")
-
 #Datos <- read_excel("Datos abejorros CNA- Cafeina y Arginina (1).xlsx",col_names = TRUE,  sheet = "Integración")
+
+
 Datos <- read_excel("Datos abejorros Integrados dosisi simple y doble 19_3_2025.xlsx",col_names = TRUE,  sheet = "Integración")
 Datos$Tratamiento<- as.factor(Datos$Tratamiento)
 summary (Datos$Tratamiento)
 
+#De los 447 capturados 12 ind. murieron antes de ser entrenados.
+
 #Defino variable respuesta, Recuerda
 Datos <- Datos %>%
-  filter(Tratamiento != F)%>%
+  filter(Tratamiento !="F")%>%
   rowwise() %>%
   mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0))
+# Orden personalizado de los factores
+Datos$Tratamiento <- factor(Datos$Tratamiento, levels = c(
+  "SIN OLOR","SIN CNA", "ARG", "CAF", "CAF+ARG", "2 ARG", "2 CAF", "2 CAF+ARG"
+))
+Datos$Nido<- factor(Datos$Nido, levels = c(
+  "2","4", "5", "6", "7", "8", "9", "11", "12", "13", "14"
+))
+summary (Datos$Nido)
+#Defino variable Aprende (A) Recuerda y generaliza
+Datos <- Datos %>%
+  rowwise() %>%
+  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0),
+         Generaliza = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 1, 1, 0),
+         A = ifelse(rowSums(across(starts_with("E"), ~ . == "A")) > 0, 1, 0))
+#Defino Terciles de peso
+Datos$Peso <- as.numeric((Datos$Peso))
+summary (Datos$Peso)
+Datos$CualiPeso<-ntile(Datos$Peso, 3)
+summary(Datos$CualiPeso)
+```
+#Analisis exploratorio
+```{r exproatorio, echo=FALSE}
+#Porcentaje que tomó el tratamiento completo
+sum(Datos$Ingestas == 6, na.rm = TRUE) / nrow(Datos) * 100
+#cuantos individuos corresponden a cada n de ingestas
+table(Datos$Ingestas)
+
+#Procentaje de supervivencia
+sum(Datos$Muere == 0, na.rm = TRUE) / sum(!is.na(Datos$Muere)) * 100
+summary(Datos$Ingestas!=0)
+table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$A[Datos$Ingestas != 0])
+
+table(Datos$Tratamiento[Datos$Ingestas != 0 & Datos$Muere != 1], Datos$Recuerda[Datos$Ingestas != 0 & Datos$Muere != 1])
+table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$Muere[Datos$Ingestas != 0])
 ```
 
-## GitHub Documents
-
-This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
-
-#Curva de adquisicion:
-Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de  que les ofrezca la recompenza.
-
+# Curva de adquisicion: Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de que les ofrezca la recompenza.
 
 ```{r adquisicion, echo=FALSE}
  # Paquetes necesarios
  library(tidyverse)
  
- # Manipulación para encontrar la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
+ #Busco la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
 DatosCurva <- Datos %>%
-  filter(Tratamiento != "SIN OLOR", Tratamiento !=  "F", Nido!="4") %>%
+  filter(Tratamiento != "SIN OLOR", Tratamiento !=  "F") %>%
   rowwise() %>%
   mutate(
     Primera_T = which(c_across(starts_with("E")) == "T")[1],
@@ -103,80 +139,136 @@ curvas_aprendizaje %>%
 ```{r ModAdquisicion, echo=TRUE}
 #defino variable respuesta
 DatosCurva$Adquisicion <- ifelse(is.na(DatosCurva$T_A), 0, 1)
-
+DatosCurva$Tratamiento <- relevel(DatosCurva$Tratamiento, ref = "SIN CNA")
 MAdqui <- glmer(Adquisicion ~ Tratamiento + (1|Nido) + (1|Dia), data=DatosCurva, family=binomial)
 summary (MAdqui)
 anova (MAdqui)
-comparaciones <- emmeans(MAdqui, pairwise ~ Tratamiento, type = "link", adjust = "tukey")
-summary(comparaciones$contrasts)
-print (emm)
+emmeans(MAdqui, pairwise ~ Tratamiento, type = "link", adjust = "tukey")
+
+
+#SUPUESTOS
+residuos_sim <- simulateResiduals(fittedModel = MAdqui, plot = TRUE) #dispersion
+testDispersion(residuos_sim) #Test de dispersion da bien
+testZeroInflation(residuos_sim) #Da bien
+testOutliers(residuos_sim) # no hay outliers
+# plotResiduals(residuos_sim, predict(MAdqui, type = "response")) 
+
 
 
 ```
+
 En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso de adquisicion.
 
+## Efecto del tratamiento sobre la cantidad de ingestas
+
+```{r ingestas1, echo=FALSE}
+
+###Gráfico de ingestas, discriminando por tratamiento
+IngestaPorTratamiento <- Datos %>%
+  filter(!is.na(Ingestas)) %>%
+  count(Tratamiento, Ingestas)
+IngestaPorTratamiento
+
+ggplot(IngestaPorTratamiento, aes(x = factor(Ingestas), y = n, fill = Tratamiento)) +
+  geom_col( color = "black",  position = position_dodge()) +   scale_fill_manual(values = c(
+    "SIN OLOR" = "black","SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  )) +
+  labs(
+    title = "Cantidad de abejorros según número de ingestas y tratamiento",
+    x = "Cantidad de ingestas",
+    y = "Número de abejorros"
+  ) +
+  theme_minimal(base_size = 14)
 
 
+#Lo repito pero con proporciones en lugar de n total
+# Calcular proporciones dentro de cada tratamiento
+IngestaProporcion <- Datos %>%
+  filter(!is.na(Ingestas)) %>%
+  count(Tratamiento, Ingestas) %>%
+  group_by(Tratamiento) %>%
+  mutate(proporcion = n / sum(n))
+
+# Graficar proporciones
+ggplot(IngestaProporcion, aes(x = factor(Ingestas), y = proporcion, fill = Tratamiento)) +
+  geom_col(color = "black", position = position_dodge()) +
+  scale_fill_manual(values = c(
+    "SIN OLOR" = "black", "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  )) +
+  labs(
+    title = "Proporción de abejorros de tratamiento que toma cada n° de ingestas",
+    x = "Cantidad de ingestas",
+    y = "Proporción dentro de tratamiento"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
 ## Efecto de cantidad de ingestas en la formacion de memoria.
 
-
-```{r ingestas, echo=FALSE}
+```{r ingestas2, echo=FALSE, results='markup'}
 #Defino variable respuesta, Recuerda
-Datos <- Datos %>%
-  filter(Tratamiento != F)%>%
-  rowwise() %>%
-  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0)) 
+#Datos <- Datos %>%
+#  rowwise() %>%
+#  mutate(Recuerda = if_else(`LIO 24hs` == 1 & `NONA 24 hs` == 0, 1, 0)) 
   
 
 ###Gráfico de % Resp vs canti de ingestas, discriminando por tratamiento
 Vivos <- Datos %>%
-  filter( Muere == 0)
+  filter( Muere == 0, Ingestas>0)
 Respuesta_general <-Vivos %>%
+  filter(!is.na(Recuerda))%>%
   group_by(Tratamiento, Ingestas) %>%
   summarise(
     Responden = sum(`LIO 24hs` == 1 & `NONA 24 hs` == 0),  	# Cuenta cuántos tienen LIO 24hs igual a 1
     Total = n_distinct(N),             	# Reemplaza "N" por el nombre correcto de la columna de ID única
     Porcentaje = (Responden / Total), # Calcula el porcentaje de respuesta
     .groups = "drop")
-ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, colour = Tratamiento)) +
-  geom_point() + 
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) + 
-  labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
-       x = "Cantidad de ingestas",
-       y = "Porcentaje de respuesta al PER 24hs") +
-  scale_color_manual(values = c("SIN CNA" = "lightblue",
-                                "CAF" = "#E69138",
-                                "ARG" = "#8E7CC3",
-                                "CAF+ARG" = "#C27BA0",
-                                "2 CAF" = "orange",
-                                "2 ARG" = "purple",
-                                "2 CAF+ARG" = "#C27")) +
-  theme(text = element_text(size = 14))
+#print(Respuesta_general )
+#ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, colour = Tratamiento)) +
+#  geom_point() + 
+#  #geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) + 
+#  labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
+#       x = "Cantidad de ingestas",
+#       y = "Porcentaje de respuesta al PER 24hs") +
+#  scale_color_manual(values = c("SIN CNA" = "lightblue",
+#                                "CAF" = "#E69138",
+#                                "ARG" = "#8E7CC3",
+#                                "CAF+ARG" = "#C27BA0",
+#                                "2 CAF" = "orange",
+#                                "2 ARG" = "purple",
+#                                "2 CAF+ARG" = "#C27")) +
+#  theme(text = element_text(size = 14))
 
 Ing <- Datos %>%
   filter(!is.na(Recuerda)) %>%
   group_by(Ingestas) %>%
   summarise(Probabilidad = mean(Recuerda)*100, n = n())
 print (Ing)
+
 ggplot(Ing, aes(x = as.factor(Ingestas), y = Probabilidad)) +
   geom_col(fill = "purple") +
+  geom_text(aes(label = paste0( n)), vjust = -0.5 , size =5) +
   labs(title = "Probabilidad de recordar el olor a las 24hs en función\n de la cantidad de ingestas en el entrenamiento.",
        x = "Cantidad de ingestas",
        y = "Probabilidad de responder al PER (%)") +
   theme_minimal()
-
 ```
+
 ```{r ModIngestas, echo=TRUE}
 #Modelo, VR: Recuerda 24 hs, VE: Cantidad de ingestas, VA: Tratamiento, nido, dia?
 
-Datos$Ingestas <- as.factor(Datos$Ingestas)
-MIng <- glmer(Recuerda ~ Ingestas + (1|Tratamiento)+ (1|Nido)+(1|Dia), 
-              data = Datos, 
+Vivos$Ingestas <- as.factor(Vivos$Ingestas)
+MIng <- glmer(Recuerda ~ Ingestas + (1|Tratamiento)+ (1|Nido), 
+              data = Vivos, 
               family = binomial,
               control = glmerControl(optimizer = "bobyqa", 
                                      optCtrl = list(maxfun = 2e5)))
 summary (MIng)
-anova (MIng)
+Anova (MIng)
 contrastesMIng <- emmeans(MIng, pairwise ~ Ingestas, type = "link", adjust = "tukey")
 summary(contrastesMIng$contrasts)
 print (contrastesMIng)
@@ -184,20 +276,176 @@ print (contrastesMIng)
 
 ```
 
+#Cantidad de ingestas totales duarante el entrenamiento en funcion del tratamiento
+
+```{r IngTratamiento, echo=TRUE}
+#ggplot(Respuesta_general, aes(as.numeric(Ingestas), Porcentaje, fill = Tratamiento)) + 
+# geom_col( color = "black",  position = position_dodge()) +   scale_fill_manual(values = c(
+#    "SIN OLOR" = "black","SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+#    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+#    "2 CAF+ARG" = "#786AE4"
+#  )) +
+#  labs(title = "Porcentaje de respuesta a las 24hs en función\n de la ingesta discriminado por tratamiento",
+#       x = "Cantidad de ingestas",
+#       y = "Porcentaje de respuesta al PER 24hs") +
+#  theme(text = element_text(size = 14))
+
+```
+
+# Respuesta al PER a las 24hs en funcion del tratamiento
+
+1)  Proporcion que REP 24hs en funcion del tratamiento, sin filtro de ingestas.
+
 ```{r PERTratamiento, echo=TRUE}
 Datos$Nido<- as.factor (Datos$Nido)
 Datos$Dia<- as.factor (Datos$Dia)
-Datos$Ingestas<- as.character (Datos$Ingestas)
-DatosMemoria <- Datos%>%
-  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas >= 2, Muere == 0)
-MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido)+(1|Dia), 
+Datos$Ingestas<- as.character (Datos$Ingestas) 
+DatosMemoria <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Ingestas > 0, Muere == 0,!is.na(Recuerda)) %>%
+  group_by(Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoria)
+ggplot(DatosMemoria, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("1) REP 24hs en funcion del tratamiento")+
+  theme_minimal()+
+  ylim(0, NA)
+
+
+
+
+```
+
+2)  filtro a menos de 4 ingestas (1,2 y 3)
+
+```{r PERpocasIngestas1, echo=TRUE}
+#Hago lo mismo pero con pocas ingestas
+DatosMemoriaPocasIng <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Ingestas < 4, Muere == 0,!is.na(Recuerda)) %>%
+  group_by(Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoriaPocasIng)
+ggplot(DatosMemoriaPocasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("2) REP 24hs en funcion del tratamiento con menos de 4 ingestas")+
+  theme_minimal()+
+  ylim(0, NA)
+```
+
+2.1) PEr porcas ingestas agurpando por tratamiento con o sin CNA
+
+```{r PERpocasIngestas2, echo=TRUE}
+#Hago lo mismo pero con pocas ingestas
+DatosMemoriaPocasIngAgrupado <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 0, Ingestas < 4, Muere == 0,!is.na(Recuerda)) %>%
+  mutate(Grupo_Tratamiento = case_when(
+      Tratamiento %in% c("CAF", "ARG", "CAF+ARG", "2 CAF", "2 ARG", "2 CAF+ARG") ~ "CAF_ARG",
+      Tratamiento %in% c("SIN CNA") ~ "SIN_CNA")) %>%
+  group_by(Grupo_Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoriaPocasIngAgrupado )
+ggplot(DatosMemoriaPocasIngAgrupado , aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", 
+    "CAF_ARG" = "#AE81E4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("2.1) REP 24hs en funcion del tratamiento (agrupado) con menos de 4 ingestas")+
+  theme_minimal()+
+  ylim(0, NA)
+```
+
+3)  Filtro a mas de 4 (5 y 6 ingestas)
+
+```{r PERMuchasIngests, echo=TRUE}
+#Hago lo mismo pero con pocas ingestas
+DatosMemoriaMuchasIng <- Datos %>%
+  filter(Tratamiento != "SIN OLOR", Nido != "4", Ingestas > 4, Muere == 0,!is.na(Recuerda)) %>%
+  group_by(Tratamiento) %>%
+  summarise(prob = mean(Recuerda) * 100, n = n())
+print(DatosMemoriaMuchasIng)
+ggplot(DatosMemoriaMuchasIng, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_col(width = 0.7, color = "black") +   scale_fill_manual(values = c(
+    "SIN CNA" = "#FFDC5E", "ARG" = "#72BABF", "CAF" = "#E87D8D", 
+    "CAF+ARG" = "#AE81E4", "2 ARG" = "#6188B1", "2 CAF" = "#D64F4C", 
+    "2 CAF+ARG" = "#786AE4"
+  ))+
+  labs(x = "Tratamiento", y = "Proporcion que responde PER 24hs") + ggtitle("3) REP 24hs en funcion del tratamiento con mas de 4 ingestas")+
+  theme_minimal()+
+  ylim(0, NA)
+```
+
+### Modelos para evaluar per en funcion del tratamiento (sin filtro de ingestas)
+
+```{r PERModelo, echo=TRUE}
+DatosMemoria<- Datos %>%
+  filter(Tratamiento != "SIN OLOR",Ingestas > 0, Muere == 0,!is.na(Recuerda)) 
+DatosMemoria$Tratamiento <- relevel(DatosMemoria$Tratamiento, ref = "SIN CNA")
+DatosMemoria$CualiPeso<-as.factor(DatosMemoria$CualiPeso)
+MMixtoNido<- glmer(Recuerda ~ Tratamiento+ (1|Nido) + (1|Dia), 
               data = DatosMemoria, 
               family = binomial) 
 
 ## Supuestos
-simm1 <- simulateResiduals(fittedMod = MMixtoNido) # , refit = T 
+simm1 <- simulateResiduals(fittedMod = MMixtoNido) 
 plot(simm1)
-plotResiduals(simm1, DatosMemoria$Tratamiento)
+testDispersion(simm1) 
+
+
+#Veo si el efecto del tratamiento es significativo
+summary(MMixtoNido)
+Anova(MMixtoNido)
+em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+contrasts <- contrast(em_means, method = "pairwise")
+summary(contrasts)
+em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
+
+
+```
+```{r PERModelo2, echo=TRUE}
+# Graficar las probabilidades estimadas
+ggplot(em_means_df, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  theme_minimal() +
+  labs(y = "Probabilidad de memoria (estimada)", x = "Tratamiento") +
+  scale_fill_manual(values = c("SIN CNA" = "lightblue",
+                               "CAF" = "#E69138",
+                               "ARG" = "#8E7CC3",
+                               "CAF+ARG" = "#C27BA0",
+                               "2 CAF" = "orange",
+                               "2 ARG" = "purple",
+                               "2 CAF+ARG" = "#C27")) +
+  theme(legend.position = "none")
+
+```
+
+#Modelo para evaluar cuantos de los que respondieron al PER en el entrenamiento responden a la evaluacion a las 24hs
+```{r Memoria, echo=TRUE}
+#Defino la variable A en donde 1 es si extienden la poboscide en alguna instancia del entrenamiento
+Datos <- Datos %>%
+  mutate(
+    A = ifelse(rowSums(across(starts_with("E"), ~ . == "A")) > 0, 1, 0))
+
+#filtro A en entrenamiento
+Aprenden<- Datos %>%
+  filter(A==1)
+
+MMemoria<- glmer(Recuerda ~ Tratamiento+ (1|Nido) + (1|Dia), 
+              data = Aprenden, 
+              family = binomial) 
+
+## Supuestos
+simm1 <- simulateResiduals(fittedMod = MMemoria) # , refit = T 
+plot(simm1)
+#plotResiduals(simm1, Aprenden$Tratamiento)
 
 testDispersion(simm1) # dio re lindo el DHARMA
 
@@ -207,26 +455,590 @@ testDispersion(simm1) # dio re lindo el DHARMA
 #shapiro.test(intercept_efectos) #no rechazo normalidad
 
 #Veo si el efecto del tratamiento es significativo
-summary(MMixtoNido) #no da sig
-drop1(MMixtoNido)
-Anova(MMixtoNido)
-em_means <- emmeans(MMixtoNido, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+summary(MMemoria) #Ingestas explica muy poco, porbablemente porque todos los que aprenden en el entrenamiento ingirieron muchas veces!! Asiqeu la saco del analsis
+Anova(MMemoria)
+em_means <- emmeans(MMemoria, ~ Tratamiento, type = "response") #### Hace las comparaciones para modelo mixto diferenciando por trat
+
+# Contrastando cada tratamiento contra el control
+contrastes_vs_control <- contrast(em_means, method = "trt.vs.ctrl", ref = "SIN CNA")
+
+# Ver resultados
+summary(contrastes_vs_control)
 contrasts <- contrast(em_means, method = "pairwise")
 summary(contrasts)
 #### grafico de comp.
 em_means_df <- as.data.frame(em_means) # dataset del emmeans anterior
 
-ggplot(em_means_df, aes(x = Tratamiento, y = prob, ymin = asymp.LCL, ymax = asymp.UCL)) +
-  geom_point(size = 3) +                      # Puntos para las medias marginales ajustadas
-  geom_errorbar(width = 0.2) +                # Barras de error para los intervalos de confianza
-  labs(x = "Tratamiento", y = "Probabilidad ajustada de memoria") + # Etiquetas de los ejes
-  theme_minimal()
+# Estimación de medias marginales
+em_means <- emmeans(MMemoria, ~ Tratamiento, type = "response")
+em_means_df <- as.data.frame(em_means)
+
+# Gráfico
+library(ggpattern)
+
+ggplot(em_means_df, aes(x = Tratamiento, y = prob, fill = Tratamiento)) +
+  geom_bar_pattern(
+    stat = "identity",
+    color = "black",
+    pattern = "stripe",
+    pattern_fill = "white",      # Color de las rayas
+    pattern_colour = NA,
+    pattern_angle = 45,
+    pattern_density = 0.3,
+    pattern_spacing = 0.03,
+    pattern_size = 0.1
+    # ¡NO incluir fill = NA!
+  ) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  scale_fill_manual(values = c(
+    "SIN CNA" = "#76A5Af",
+    "CAF" = "#E69138",
+    "ARG" = "#8E7CC3",
+    "CAF+ARG" = "#C27BA0",
+    "2 CAF" = "#FFD966",
+    "2 ARG" = "purple",
+    "2 CAF+ARG" = "#C27"
+  )) +
+  theme_minimal() +
+  labs(
+    y = "Probabilidad de memoria (estimada)",
+    x = "Tratamiento",
+    title = "Memoria estimada en abejorros que aprendieron"
+  ) +
+  theme(legend.position = "none")
+
 
 
 ```
 
+
+
+```{r AprendizajeEnFuncionDeMiExperiencia, echo=TRUE}
+library(dplyr)
+library(tidyr)
+# Asegurate de que Fecha sea Date
+Datos <- Datos %>%
+  mutate(Fecha = as.Date(Fecha))
+
+# Convertir a formato largo
+datos_largos <- Datos %>%
+  pivot_longer(cols = c(A, Recuerda), names_to = "Variable", values_to = "Valor")
+
+# Graficar con color por variable
+ggplot(datos_largos, aes(x = Fecha, y = Valor, color = Variable, fill = Variable)) +
+  geom_point(position = position_jitter(height = 0.05), alpha = 0.3) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = TRUE, alpha = 0.2) +
+  labs(x = "Fecha", y = "Probabilidad",
+       title = "Curvas suavizadas de aprendizaje y recuerdo en el tiempo",
+       color = "Variable", fill = "Variable") +
+  scale_color_manual(values = c("A" = "#2E86AB", "Recuerda" = "#E27D60")) +
+  scale_fill_manual(values = c("A" = "#2E86AB", "Recuerda" = "#E27D60")) +
+  theme_minimal()
+
+
+
+
+
+#Y si agrego a los que responden de los que aprendierons ?
+DatosResponden <- Datos %>%
+  rename(Responden = Recuerda) %>%
+  mutate(
+    Recuerdan = ifelse(A == 1, Responden, NA)  # Solo evaluable si aprendió
+  )
+
+# Convertir a formato largo
+datos_largos <- DatosResponden %>%
+  pivot_longer(cols = c(A, Responden, Recuerdan), names_to = "Variable", values_to = "Valor")
+
+ggplot(datos_largos, aes(x = Fecha, y = Valor, color = Variable, fill = Variable)) +
+  geom_point(position = position_jitter(height = 0.05), alpha = 0.3) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),
+              se = TRUE, alpha = 0.2) +
+  scale_color_manual(values = c("A" = "#2E86AB", "Responden" = "#E27D60", "Recuerdan" = "#41B3A3")) +
+  scale_fill_manual(values = c("A" = "#2E86AB", "Responden" = "#E27D60", "Recuerdan" = "#41B3A3")) +
+  labs(x = "Fecha", y = "Probabilidad",
+       title = "Dinámica del aprendizaje, respuesta y recuerdo en el tiempo",
+       color = "Variable", fill = "Variable") +
+  theme_minimal()
+
+
+
+```
+```{r AprendizajePeso, echo=TRUE}
+str(Datos$Peso)
+ #poner 5 si quiero los quintiles
+
+AprendPeso <- Datos %>%
+  filter(!is.na(A)) %>%  # Ignora los NA en A
+  group_by(CualiPeso) %>%
+  summarise(
+    Aprenden = sum(A == "1"),
+    Total = n(),
+    Aprendizaje = Aprenden / Total
+  ) %>%
+  mutate(
+    Aprendizaje = round(Aprendizaje * 100, 1),
+    CualiPeso = as.factor(CualiPeso)
+  )
+
+print(AprendPeso)
+
+##Modelo
+# Asegurarse de que aprende sea numérica
+Datos$A <- as.numeric(Datos$A)
+
+# Ajustar modelo logístico
+MAprePeso <-glmer(A ~ as.factor(CualiPeso) + (1|Tratamiento) + (1|Nido), 
+                data = Datos, family = binomial)
+summary(MAprePeso)
+
+# Estimar medias marginales (en escala de respuesta = porcentaje)
+em_means <- emmeans(MAprePeso, ~ CualiPeso, type = "response")
+em_means_df <- as.data.frame(em_means)
+print(em_means_df)
+# Renombrar columna para facilitar el gráfico
+colnames(em_means_df)[colnames(em_means_df) == "prob"] <- "Aprendizaje"
+
+# Convertir Aprendizaje a porcentaje
+em_means_df$Aprendizaje <- round(em_means_df$Aprendizaje * 100, 1)
+em_means_df$CualiPeso <- as.factor(em_means_df$CualiPeso)
+
+# Gráfico
+ggplot(em_means_df, aes(x = CualiPeso, y = Aprendizaje)) +
+  geom_col(fill = "purple") +
+  geom_text(aes(label = paste0(Aprendizaje, "%")), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), limits = c(0, 105)) +
+  geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), width = 0.2) +
+  labs(
+    x = "Peso (tercil)",
+    y = "Probabilidad de adquisición estimada",
+    title = "Probabilidad de adquisicion estimada según peso del abejorro"
+  ) +
+  theme_minimal()
+
+# Comparaciones post hoc entre niveles de Peso con ajuste de Tukey
+comparaciones <- pairs(em_means, adjust = "tukey")
+print(comparaciones)
+```
+
+```{r exploratoriopeso, echo=TRUE}
+# Calcular medias por Nido y Temporada
+medias <- Datos %>%
+  group_by(Nido, Estacion) %>%
+  summarise(media_peso = mean(Peso, na.rm = TRUE), .groups = "drop")
+
+# Gráfico con densidad + línea de media
+ggplot(Datos, aes(x = Peso, fill = Estacion)) +
+  geom_density(alpha = 0.5, color = "black") +
+  geom_vline(data = medias, aes(xintercept = media_peso, color = Estacion), 
+             linetype = "dashed", size = 0.8, show.legend = FALSE) +
+  facet_wrap(~ Nido, scales = "free_y", ncol = 1) +
+  theme_minimal(base_size = 12) +
+  labs(title = "Distribución del peso por nido y temporada",
+       x = "Peso del abejorro", y = "Densidad") +
+  scale_fill_brewer(palette = "Set2") +
+  scale_color_brewer(palette = "Set2")
+```
+```{r Pesotiempo, echo=TRUE}
+# Asegurate de que la variable de fecha esté en formato Date
+Datos <- Datos %>%
+  mutate(Fecha = as.Date(Fecha))  # Cambiar 'Fecha' al nombre real de tu columna
+
+# Crear nueva variable: días desde la primera captura en cada nido
+Datos <- Datos %>%
+  group_by(Nido) %>%
+  mutate(DiasDesdeInicio = as.numeric(Fecha - min(Fecha))) %>%
+  ungroup()
+  ggplot(Datos, aes(x = DiasDesdeInicio, y = Peso, color = Estacion)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~Nido, scales = "free_y") +
+  labs(
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Estación",
+    title = "Evolución del peso de abejorros a lo largo del tiempo por nido"
+  ) +
+  theme_minimal()
+
+ggplot(Datos, aes(x = DiasDesdeInicio, y = Peso, color = as.factor(Nido))) +
+  geom_point(alpha = 0.4, size = 1.5) +  # puntos individuales
+  geom_smooth(method = "glm", se = FALSE, size = 1) + 
+  labs(
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Nido",
+    title = "Tendencias del peso de abejorros por estación"
+  ) +
+  theme_minimal()
+
+library(mgcv)
+
+ggplot(Datos, aes(x = DiasDesdeInicio, y = Peso, color = as.factor(Nido))) +
+  # Puntos originales
+  geom_point(alpha = 0.5, size = 1.5) + geom_smooth(method = "glm", se = FALSE, size = 1) +
+  # Etiquetas y títulos
+  labs(
+    title = "Evolución del peso de abejorros",
+    subtitle = "Tendencias suavizadas por nido",
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Nido"
+  ) +
+  # Tema clásico para publicación
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 13),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 11)
+  )
+geom_smooth(aes(group = 1), color = "black", method = "glm", formula = y ~ s(x, bs = "cs"),
+            size = 1.2)
+
+#------------------------
+  # Filtrar datos válidos
+Datos_peso_filt <- Datos %>%
+  filter(!is.na(Peso))
+
+ggplot(Datos_peso_filt, aes(x = DiasDesdeInicio, y = Peso, color = as.factor(Nido))) +
+  # Puntos originales
+  geom_point(alpha = 0.5, size = 1.5) +
+
+  # Ajuste glm polinómico por nido
+  geom_smooth(method = "glm", formula = y ~ x, se = FALSE, size = 1) +
+
+  # Títulos y etiquetas
+  labs(
+    title = "Evolución del peso de abejorros",
+    subtitle = "MLGM con nido como variable de efecto aleatorio",
+    x = "Días desde la primera captura",
+    y = "Peso del abejorro (mg)",
+    color = "Nido"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 13),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 11)
+  )+
+  geom_smooth(aes(group = 1), method = "glm", formula = y ~ x,
+              color = "black", size = 1.2, linetype = "dashed", se = FALSE)
+
+```
+
+```{r Modpesotiempo, echo=TRUE}
+# 1. Ajustar modelo global
+Modpesotiempo <-lmer(Peso ~ DiasDesdeInicio + (1|Nido), data = Datos_peso_filt)
+summary(Modpesotiempo)
+summary(lmerTest::lmer(Peso ~ DiasDesdeInicio + (1 | Nido), data = Datos_peso_filt))
+
+```
+Por cada día que pasa desde la primera captura, el peso promedio de los abejorros aumenta 0.00076 gramos (≈0.76 mg).
+Este aumento es estadísticamente significativo con un p<0.001.
+
+```{r RespuestaPeso, echo=TRUE}
+RespPeso <- Datos %>%
+  filter(!is.na(Recuerda)) %>%  # Ignora los NA en A
+  group_by(CualiPeso) %>%
+  summarise(
+    Recuerdan = sum(Recuerda == "1"),
+    Total = n(),
+    Respuesta = Recuerdan / Total
+  ) %>%
+  mutate(
+    Respuesta = round(Respuesta * 100, 1),
+    CualiPeso = as.factor(CualiPeso)
+  )
+
+print(RespPeso)
+
+##Modelo
+# Asegurarse de que aprende sea numérica
+Datos$Recuerda <- as.numeric(Datos$Recuerda)
+
+# Ajustar modelo logístico
+MRecPeso <- glmer(Recuerda ~ as.factor(CualiPeso)+(1|Nido), data = Datos, family = binomial)
+summary(MRecPeso)  
+anova(MRecPeso)    #N/S
+
+# Estimar medias marginales (en escala de respuesta = porcentaje)
+em_means <- emmeans(MRecPeso, ~ CualiPeso, type = "response")
+em_means_df <- as.data.frame(em_means)
+
+# Crear una columna en porcentaje para el gráfico
+em_means_df$Respuesta <- round(em_means_df$prob * 100, 1)
+
+# Gráfico
+ggplot(em_means_df, aes(x = CualiPeso, y = Respuesta)) +
+  geom_col(fill = "purple") +
+  geom_text(aes(label = paste0(Respuesta, "%")), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), limits = c(0, 105)) +
+  geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), width = 0.2) +
+  labs(
+    x = "Peso (tercil)",
+    y = "Respuesta (%) en 24 hs",
+    title = "Respuesta según recil de peso"
+  ) +
+  theme_minimal()
+
+```
+```{r supervivenciaIng1, echo=TRUE}
+# Crear terciles (3 grupos de peso)
+Datos$TercilPeso <- ntile(Datos$Peso, 3)
+Datos$TercilPeso <- factor(Datos$TercilPeso, labels = c("Bajo", "Medio", "Alto"))
+Datos$Ingestas <- as.numeric(as.character(Datos$Ingestas))
+ResumenIngesta <- Datos %>%
+  filter(!is.na(Ingestas)) %>%
+  group_by(TercilPeso) %>%
+  summarise(
+    MediaIngesta = mean(Ingestas),
+    SD = sd(Ingestas),
+    N = n(),
+    SE = SD / sqrt(N)
+  )
+
+print(ResumenIngesta)
+
+# Gráfico de medias con error
+ggplot(ResumenIngesta, aes(x = TercilPeso, y = MediaIngesta)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = MediaIngesta - SE, ymax = MediaIngesta + SE), width = 0.2) +
+  geom_text(aes(label = round(MediaIngesta, 2)), vjust = -0.5) +
+  labs(
+    x = "Tercil de peso",
+    y = "Cantidad promedio de ingestas",
+    title = "Ingestas según tercil de peso"
+  ) +
+  theme_minimal()
+
+# MODELO 
+modelo_poisson <- glm(Ingestas ~ TercilPeso, data = Datos, family = poisson)
+summary(modelo_poisson)  #N/S
+
+# Medias marginales estimadas
+library(emmeans)
+em_ingesta <- emmeans(modelo_poisson, ~ TercilPeso, type = "response")
+print(em_ingesta)
+
+```
+
+
 # Supervivencia
-```{r supervivencia, echo=TRUE}
+
+Supervivencia en funcion de cantidad de ingestas
+
+```{r supervivenciaIng2, echo=TRUE}
+SupVsIng <- Datos %>%
+  group_by(Ingestas) %>%
+  summarise(Sobreviven = sum(Muere == "0" ), 
+            Total = n(), 
+            Supervivencia = round((Sobreviven / Total), 2))
+print(SupVsIng)
+ggplot(SupVsIng, aes(x = Ingestas, y = Supervivencia)) +
+  geom_col(fill = "orange") +
+  geom_text(aes(label = Total ), vjust = -0.5, size = 3.5) +
+  labs(
+    x = "Cantidad de ingestas",
+    y = "Supervivencia (%)",
+    title = "Supervivencia según cantidad de ingestas"
+  ) +
+  theme_minimal()
+```
+
+```{r ModSupervivenciaIngTrat, echo=TRUE}
+# Asegurarse de que Muere sea numérica
+Datos$Muere <- as.numeric(Datos$Muere)
+
+# Ajustar el modelo logístico
+modelo_ingestas <- glm(Muere ~ as.factor(Ingestas), data = Datos, family = binomial)
+
+# Resumen del modelo
+summary(modelo_ingestas)
+
+#Tengo un caso de separacion perfecta que me rompe el modelo! lo hago de nuevo con otro paquete
+
+library(logistf)
+modelo_firth <- logistf(Muere ~ as.factor(Ingestas), data = Datos)
+summary(modelo_firth) # todos difieren sig de 0 ingestas, no puedo aplicar tukey con este modelo :( 
+
+
+```
+
+```{r supervivenciaIngTrat, echo=TRUE}
+SupVsIngTrat <- Datos %>%
+  mutate(Grupo_Tratamiento = case_when(
+    Tratamiento %in% c("CAF", "ARG", "CAF+ARG", "2 CAF", "2 ARG", "2 CAF+ARG") ~ "CAF_ARG",
+    Tratamiento %in% c("SIN CNA", "SIN OLOR") ~ "SIN_CNA_OLOR"
+  )) %>%
+  group_by(Ingestas, Grupo_Tratamiento) %>%
+  summarise(
+    Sobreviven = sum(Muere == "0"),
+    Total = n(),
+    Supervivencia = round(Sobreviven / Total, 2),
+    .groups = "drop"
+  )
+
+ggplot(SupVsIngTrat, aes(x = factor(Ingestas), y = Supervivencia, fill = Grupo_Tratamiento)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = Supervivencia),
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  labs(
+    x = "Cantidad de ingestas",
+    y = "Supervivencia (proporción)",
+    title = "Supervivencia según cantidad de ingestas y tratamiento",
+    fill = "Grupo de tratamiento"
+  ) +
+  theme_minimal()
+
+```
+
+Supervivencia en funcion del peso
+
+```{r supervivenciaPeso, echo=TRUE}
+
+str(Datos$Peso)
+Datos$Peso <- as.numeric((Datos$Peso))
+summary (Datos$Peso)
+Datos$CualiPeso<-ntile(Datos$Peso, 3) #poner 5 si quiero los quintiles
+
+SuperPeso <- Datos %>%
+  group_by(CualiPeso) %>%
+  summarise(
+    Sobreviven = sum(Muere == "0"),
+    Total = n(),
+    Supervivencia = Sobreviven / Total
+  ) %>%
+  mutate(
+    Supervivencia = round(Supervivencia * 100, 1),
+    CualiPeso = as.factor(CualiPeso)
+  )
+print(SuperPeso)
+
+ggplot(SuperPeso, aes(x = CualiPeso, y = Supervivencia)) +
+  geom_col(fill = "#FFD966") +
+  geom_text(aes(label = Supervivencia), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), limits = c(0, 105)) +
+  labs(
+    x = "Peso",
+    y = "Supervivencia (%)",
+    title = "Supervivencia según peso"
+  ) +
+  theme_minimal()
+```
+
+```{r ModSupPEso, echo=TRUE}
+# Asegurarse de que Muere sea numérica
+Datos$Muere <- as.numeric(Datos$Muere)
+
+# Ajustar modelo de regresión logística
+MSupPeso <- glm(Muere ~ as.factor(CualiPeso), data = Datos, family = binomial)
+
+# Ver resumen del modelo
+summary(MSupPeso)
+
+# Contrastes por pares si hay más de 2 niveles
+library(emmeans)
+emmeans(MSupPeso, pairwise ~ CualiPeso, type = "response")
+
+```
+
+#VA Nido
+```{r AprendizajeNido, echo=TRUE}
+
+table(Datos$Nido [ Datos$Muere != 0])
+
+AprendNido <- Datos %>%
+  filter(!is.na(A), Ingestas != 0) %>%  # Ignora los NA en A
+  group_by(Nido) %>%
+  summarise(
+    Aprenden = sum(A == "1"),
+    Total = n(),
+    Aprendizaje = Aprenden / Total
+  ) %>%
+  mutate(
+    Aprendizaje = round(Aprendizaje * 100, 1),
+    Nido = as.factor(Nido)
+  )
+
+print(AprendNido)
+
+##Modelo
+# Asegurarse de que aprende sea numérica
+Datos$A <- as.numeric(Datos$A)
+
+# Ajustar modelo logístico
+MApreNido <-glmer(A ~ as.factor(Nido) + (1|Tratamiento), 
+                data = Datos, family = binomial)
+summary(MApreNido)
+
+# Estimar medias marginales (en escala de respuesta = porcentaje)
+library(emmeans)
+em_means <- emmeans(MApreNido, ~ Nido, type = "response")
+em_means_df <- as.data.frame(em_means)
+print(em_means_df)
+
+# Gráfico
+ggplot(em_means_df, aes(x = Nido, y = prob)) +
+  geom_col(fill = "purple") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  labs(
+    x = "Nido",
+    y = "Probabilidad de adquisición estimada",
+    title = "Probabilidad de adquisicion estimada según Nido"
+  ) +
+  theme_minimal()
+
+# Comparaciones post hoc entre niveles de Peso con ajuste de Tukey
+comparaciones <- pairs(em_means, adjust = "tukey")
+print(comparaciones)
+```
+
+```{r RecuerdaNido, echo=TRUE}
+
+RecuerdaNido <- Datos %>%
+  filter(!is.na(Recuerda), Ingestas != 0, A==1) %>%
+  group_by(Nido) %>%
+  summarise(
+    Recuerdan = sum(Recuerda == "1"),
+    Total = n(),
+    Recuerdo = Recuerdan / Total
+  ) %>%
+  mutate(
+    Recuerdo = round(Recuerdo * 100, 1),
+    Nido = as.factor(Nido)
+  )
+
+print(RecuerdaNido)
+
+```
+
+```{r MuereNido, echo=TRUE}
+
+MuereNido <- Datos %>%
+  filter(!is.na(Muere), Ingestas != 0) %>%
+  group_by(Nido) %>%
+  summarise(
+    Mueren = sum(Muere == "1"),
+    Total = n(),
+    Mortalidad = Mueren / Total
+  )
+
+print(MuereNido)
+
+```
+
+
+Supervivencia segun tratamiento
+
+```{r supervivenciaTrat, echo=TRUE}
 #Indice de supervivencia segun tratamiento cuando hubo al menos 2 ingestas
 Datos_filtrado <-Datos%>%
   filter(Ingestas >= 2)
@@ -274,10 +1086,8 @@ ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamie
   theme_minimal() +
   theme(legend.position = "none")
 ```
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
-
-
+#Generalizacion
 
 ```{r Generalizacion, echo=TRUE}
 Generalizacion <- Datos_filtrado  %>%
@@ -323,14 +1133,22 @@ contrasts <- contrast(em_means, method = "pairwise")
 summary(contrasts, infer = TRUE)
 
 em_means_resp <- summary(em_means, type = "response")
+
 ggplot(em_means_resp, aes(x = Grupo_Tratamiento, y = prob, fill = Grupo_Tratamiento)) +
-  geom_col(width = 0.6, alpha = 0.6, color = "darkgreen") +  # Barras de fondo
+  geom_col(width = 0.6, alpha = 0.6) +  # Barras de fondo
   geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +  # Barras de error
   geom_point(size = 3, color = "black") +  # Punto de la media ajustada
-  labs(
-    x = "Tratamiento",
-    y = "Probabilidad ajustada de mortalidad"
-  ) +
+  labs(title = "Tasa de generalización a las 24hs",
+       x = "Tratamiento",
+       y = "Tasa de generalización") +
+  scale_fill_manual(values = c("CAF_ARG" = "darkgreen",
+                               "SIN_CNA_OLOR" = "lightblue")) +
   theme_minimal() +
-  theme(legend.position = "none")
+  theme(
+    text = element_text(size = 14))
 ```
+
+
+ 
+
+
