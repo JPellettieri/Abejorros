@@ -78,10 +78,10 @@ table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$Muere[Datos$Ingestas != 0])
 # Curva de adquisicion: Evaluar el efecto del tratamiento sobre el aprendizaje, para cada número de ingestas cuantos de los que tomaron extendieron la proboscide antes de que les ofrezca la recompenza.
 
 ```{r adquisicion, echo=FALSE}
- # Paquetes necesarios
- library(tidyverse)
- 
- #Busco la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
+# Paquetes necesarios
+library(tidyverse)
+
+#Busco la primera ingesta de recompensa (T) y el primer aprendizaje (A) después de T
 DatosCurva <- Datos %>%
   filter(Tratamiento != "SIN OLOR", Tratamiento !=  "F") %>%
   rowwise() %>%
@@ -92,7 +92,7 @@ DatosCurva <- Datos %>%
     T_A= Primera_A - Primera_T + 1
   ) %>%
   ungroup()
- 
+
 resumen_aprendizaje <- DatosCurva %>%
   group_by(Tratamiento) %>%
   summarise(
@@ -101,7 +101,7 @@ resumen_aprendizaje <- DatosCurva %>%
     N = n(),
     SE = SD / sqrt(N)
   )
- 
+
 
 curvas_aprendizaje <- DatosCurva %>%
   group_by(Tratamiento, T_A) %>%
@@ -118,22 +118,50 @@ puntos_inicio <- curvas_aprendizaje %>%
 curvas_aprendizaje %>%
   bind_rows(puntos_inicio) %>%
   arrange(Tratamiento, T_A) %>%
-  ggplot(aes(x = T_A, y = Proporcion, color = Tratamiento)) +
+  ggplot(aes(x = T_A, y = Proporcion,
+             color = Tratamiento,
+             linetype = Tratamiento,
+             shape = Tratamiento)) +
   geom_line(size = 1) +
-  geom_point(size = 2) +
+  geom_point(size = 3) +
   labs(
     x = "Exposiciones con Ingesta",
     y = "Proporción Acumulada de Aprendizaje",
-    title = "Curvas de adquisición por Tratamiento") +
-  scale_color_manual(values = c("SIN CNA" = "lightblue",
-                                "CAF" = "#E69138",
-                                "ARG" = "#8E7CC3",
-                                "CAF+ARG" = "#C27BA0",
-                                "2 CAF" = "orange",
-                                "2 ARG" = "purple",
-                                "2 CAF+ARG" = "#D22176"))+
+    title = "Curvas de adquisición por Tratamiento"
+  ) +
+  scale_color_manual(values = c(
+    "SIN CNA" = "#FDDC69", 
+    "ARG" = "#78D5D6", 
+    "CAF" = "#FA7474", 
+    "CAF+ARG" = "#AE80DC", 
+    "2 ARG" = "#0079AC", 
+    "2 CAF" = "#BE340D", 
+    "2 CAF+ARG" = "#5C0492"
+  )) +
+  # scale_linetype_manual(values = c(
+  #   "SIN CNA" = "solid",
+  #   "ARG" = "longdash",
+  #   "CAF" = "dotted",
+  #   "CAF+ARG" = "dotdash",
+  #   "2 ARG" = "longdash",
+  #   "2 CAF" = "dotted",
+  #   "2 CAF+ARG" = "dotdash"
+  # )) +
+  scale_shape_manual(values = c(
+    "SIN CNA" = 16,  # círculo
+    "ARG" = 17,      # triángulo
+    "CAF" = 15,      # cuadrado
+    "CAF+ARG" = 18,  # rombo
+    "2 ARG" = 17,     
+    "2 CAF" = 15,     
+    "2 CAF+ARG" = 18  
+  )) +
   theme_minimal() +
-  theme(legend.position = "bottom")
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10)
+  )
 ```
 
 ```{r ModAdquisicion, echo=TRUE}
@@ -166,7 +194,14 @@ En dosis altas la cafeina y la arginina tienen efectos positivos en el proceso d
 ###Gráfico de ingestas, discriminando por tratamiento
 IngestaPorTratamiento <- Datos %>%
   filter(!is.na(Ingestas)) %>%
-  count(Tratamiento, Ingestas)
+  count(Tratamiento, Ingestas)%>%
+  complete(
+    Tratamiento = unique(Datos$Tratamiento),
+    Ingestas = unique(Datos$Ingestas),
+    fill = list(n = 0)
+  ) %>%
+  group_by(Tratamiento) %>%
+  mutate(proporcion = n / sum(n))
 IngestaPorTratamiento
 
 ggplot(IngestaPorTratamiento, aes(x = factor(Ingestas), y = n, fill = Tratamiento)) +
@@ -187,9 +222,15 @@ ggplot(IngestaPorTratamiento, aes(x = factor(Ingestas), y = n, fill = Tratamient
 # Calcular proporciones dentro de cada tratamiento
 IngestaProporcion <- Datos %>%
   filter(!is.na(Ingestas)) %>%
-  count(Tratamiento, Ingestas) %>%
+count(Tratamiento, Ingestas)%>%
+  complete(
+    Tratamiento = unique(Datos$Tratamiento),
+    Ingestas = unique(Datos$Ingestas),
+    fill = list(n = 0)
+  ) %>%
   group_by(Tratamiento) %>%
   mutate(proporcion = n / sum(n))
+
 
 # Graficar proporciones
 ggplot(IngestaProporcion, aes(x = factor(Ingestas), y = proporcion, fill = Tratamiento)) +
@@ -260,19 +301,38 @@ ggplot(Ing, aes(x = as.factor(Ingestas), y = Probabilidad)) +
 
 ```{r ModIngestas, echo=TRUE}
 #Modelo, VR: Recuerda 24 hs, VE: Cantidad de ingestas, VA: Tratamiento, nido, dia?
-
+Vivos <- Datos %>%
+  filter( Tratamiento != "SIN OLOR", Ingestas!= 0 )
 Vivos$Ingestas <- as.factor(Vivos$Ingestas)
-MIng <- glmer(Recuerda ~ Ingestas + (1|Tratamiento)+ (1|Nido), 
+MIng <- glmer(Recuerda ~ Ingestas + Tratamiento+ (1|Nido), 
               data = Vivos, 
               family = binomial,
               control = glmerControl(optimizer = "bobyqa", 
                                      optCtrl = list(maxfun = 2e5)))
+
 summary (MIng)
 Anova (MIng)
-contrastesMIng <- emmeans(MIng, pairwise ~ Ingestas, type = "link", adjust = "tukey")
-summary(contrastesMIng$contrasts)
-print (contrastesMIng)
-
+  # contrastesMIng <- emmeans(MIng, pairwise ~ Ingestas, type = "link", adjust = "tukey")
+  # summary(contrastesMIng$contrasts)
+  # print (contrastesMIng)
+# Medias marginales de Ingestas (en escala de probabilidad)
+medias_Ingestas <- emmeans(MIng, ~ Ingestas, type = "response")
+medias_Ingestas
+#pairs(medias_Ingestas, adjust = "tukey") # nada da significativo
+contrastes_wald <- contrast(medias_Ingestas, method = "trt.vs.ctrl", ref = 1, adjust = "none")
+summary(contrastes_wald, infer = TRUE) 
+# grafico
+df <- as.data.frame(medias_Ingestas)
+df
+ggplot(df, aes(x = Ingestas, y = prob)) +
+  geom_col(fill = "#76A5AF", width = 0.6) +  # barras
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +  # bigotes
+  labs(
+    title = "Medias marginales ajustadas por número de ingestas",
+    x = "Cantidad de ingestas",
+    y = "Probabilidad ajustada de recordar"
+  ) +
+  theme_minimal(base_size = 13)
 
 ```
 
@@ -582,16 +642,21 @@ AprendPeso <- Datos %>%
   )
 
 print(AprendPeso)
-
+DatosPeso<- Datos %>%
+  filter(Tratamiento != "SIN OLOR")
 ##Modelo
 # Asegurarse de que aprende sea numérica
 Datos$A <- as.numeric(Datos$A)
 
 # Ajustar modelo logístico
-MAprePeso <-glmer(A ~ as.factor(CualiPeso) + (1|Tratamiento) + (1|Nido), 
-                data = Datos, family = binomial)
-summary(MAprePeso)
-
+MAprePeso <-glmer(A ~ as.factor(CualiPeso)+ Tratamiento + (1|Nido) + (1|Dia), 
+                data = DatosPeso, family = binomial)
+MAprePeso2 <-glmer(A ~ as.factor(CualiPeso) + (1|Nido) + (1|Dia), 
+                data = DatosPeso, family = binomial)
+MAprePeso3 <-glmer(A ~ as.factor(CualiPeso)+ Tratamiento + (1|Nido), 
+                data = DatosPeso, family = binomial)
+#summary(MAprePeso1, MAprePeso2, MAprePeso3)
+anova(MAprePeso1, MAprePeso2, MAprePeso3)<
 # Estimar medias marginales (en escala de respuesta = porcentaje)
 em_means <- emmeans(MAprePeso, ~ CualiPeso, type = "response")
 em_means_df <- as.data.frame(em_means)
