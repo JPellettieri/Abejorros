@@ -827,10 +827,10 @@ print(RespPeso)
 
 ##Modelo
 # Asegurarse de que aprende sea numérica
-Datos$Recuerda <- as.numeric(Datos$Recuerda)
+DatosPeso$Recuerda <- as.numeric(DatosPeso$Recuerda)
 
 # Ajustar modelo logístico
-MRecPeso <- glmer(Recuerda ~ as.factor(CualiPeso)+(1|Nido), data = Datos, family = binomial)
+MRecPeso <- glmer(Recuerda ~ as.factor(CualiPeso)+Tratamiento+(1|Nido), data = DatosPeso, family = binomial)
 summary(MRecPeso)  
 anova(MRecPeso)    #N/S
 
@@ -849,8 +849,8 @@ ggplot(em_means_df, aes(x = CualiPeso, y = Respuesta)) +
   geom_errorbar(aes(ymin = asymp.LCL * 100, ymax = asymp.UCL * 100), width = 0.2) +
   labs(
     x = "Peso (tercil)",
-    y = "Respuesta (%) en 24 hs",
-    title = "Respuesta según recil de peso"
+    y = "Respuesta (PER%) en 24 hs",
+    title = "Respuesta según tercil de peso"
   ) +
   theme_minimal()
 
