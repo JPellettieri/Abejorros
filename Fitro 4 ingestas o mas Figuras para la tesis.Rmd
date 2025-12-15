@@ -854,6 +854,10 @@ ggplot(em_means_df, aes(x = CualiPeso, y = Respuesta)) +
   ) +
   theme_minimal()
 
+# Comparaciones post hoc entre niveles de Peso con ajuste de Tukey
+comparaciones <- pairs(em_means, adjust = "tukey")
+print(comparaciones)
+
 ```
 ```{r supervivenciaIng1, echo=TRUE}
 # Crear terciles (3 grupos de peso)
@@ -1003,8 +1007,11 @@ ggplot(SuperPeso, aes(x = CualiPeso, y = Supervivencia)) +
 # Asegurarse de que Muere sea numérica
 Datos$Muere <- as.numeric(Datos$Muere)
 
+SupPeso <- Datos %>%
+  filter(!is.na(Muere))
+SupPeso$CualiPeso <- as.factor(SupPeso$CualiPeso)
 # Ajustar modelo de regresión logística
-MSupPeso <- glm(Muere ~ as.factor(CualiPeso), data = Datos, family = binomial)
+MSupPeso <- glm(Muere ~ CualiPeso, data = SupPeso, family = binomial)
 
 # Ver resumen del modelo
 summary(MSupPeso)
@@ -1102,7 +1109,39 @@ print(MuereNido)
 
 
 Supervivencia segun tratamiento
+```{r ModSuptrat sin agrupar, echo=TRUE}
+# Filtrar los datos: solo individuos con al menos 2 ingestas
+Datos_filtrado <- Datos %>%
+  filter(Ingestas >= 2)
 
+# Calcular índice de supervivencia por tratamiento (sin agrupar)
+Supervivencia <- Datos_filtrado %>%
+  group_by(Tratamiento) %>%
+  summarise(
+    Sobreviven = sum(Muere == "0"),
+    Total = n(),
+    Supervivencia = Sobreviven / Total
+  )
+
+print(Supervivencia)
+
+# Asegurarse de que Muere sea numérica
+Datos$Muere <- as.numeric(Datos$Muere)
+
+SupPeso <- Datos %>%
+  filter(!is.na(Muere))
+SupPeso$CualiPeso <- as.factor(SupPeso$CualiPeso)
+# Ajustar modelo de regresión logística
+MSupPeso <- glm(Muere ~ Tratamiento , data = SupPeso, family = binomial)
+
+# Ver resumen del modelo
+summary(MSupPeso)
+
+# Contrastes por pares si hay más de 2 niveles
+library(emmeans)
+emmeans(MSupPeso, pairwise ~ Tratamiento, type = "response")
+
+```
 ```{r supervivenciaTrat, echo=TRUE}
 #Indice de supervivencia segun tratamiento cuando hubo al menos 2 ingestas
 Datos_filtrado <-Datos%>%
@@ -1188,7 +1227,7 @@ Datos_bin <- Datos_filtrado %>%
       Tratamiento %in% c("SIN CNA") ~ "SIN_CNA"))
 
 
-modeloGen <- glm(Generaliza ~ Grupo_Tratamiento, family = binomial, data = Datos_bin)
+modeloGen <- glm(Generaliza ~ Tratamiento, family = binomial, data = Datos_bin)
 
 
 summary(modeloGen)
