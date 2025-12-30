@@ -86,7 +86,7 @@ table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$A[Datos$Ingestas != 0])
 table(Datos$Tratamiento[Datos$Ingestas != 0 & Datos$Muere != 1], Datos$Recuerda[Datos$Ingestas != 0 & Datos$Muere != 1])
 table(Datos$Tratamiento[Datos$Ingestas != 0], Datos$Muere[Datos$Ingestas != 0])
 
-
+summary(Datos)
 ############## ADQUISICION PESO Y TRATAMNIENTO va DIA Y NIDO###################
 str(Datos$Peso)
 
@@ -106,6 +106,58 @@ AprendPeso <- Datos %>%
 
 print(AprendPeso)
 
+
+          ### TABLA RESUMEN###
+library(dplyr)
+
+# 1. Calculamos la tabla por tratamiento
+Tabla_Final <- Datos %>%
+  group_by(Tratamiento) %>%
+  summarise(
+    # n: Total de individuos que iniciaron (asumimos que todos ingirieron al menos 1)
+    n_ingieren = n(),
+    
+    # Adquisición: Variable A == 1
+    n_adquisicion = sum(A == 1, na.rm = TRUE),
+    perc_adquisicion = (n_adquisicion / n_ingieren) * 100,
+    
+    # Mortalidad: Usamos tu columna 'Muere'
+    n_mueren = sum(Muere == 1, na.rm = TRUE),
+    perc_mueren = (n_mueren / n_ingieren) * 100,
+    
+    # Respuesta 24hs: Los que responden (Recuerda o Generaliza) sobre los que NO murieron
+    n_vivos = n_ingieren - n_mueren,
+    n_responden_24 = sum(Recuerda == 1 | Generaliza == 1, na.rm = TRUE),
+    perc_responden_24 = (n_responden_24 / n_vivos) * 100
+  ) %>%
+  ungroup()
+
+# 2. Calculamos la fila de TOTAL
+Total_Fila <- Tabla_Final %>%
+  summarise(
+    Tratamiento = "Total",
+    n_ingieren = sum(n_ingieren),
+    n_adquisicion = sum(n_adquisicion),
+    perc_adquisicion = (n_adquisicion / n_ingieren) * 100,
+    n_mueren = sum(n_mueren),
+    perc_mueren = (n_mueren / n_ingieren) * 100,
+    n_vivos = sum(n_vivos),
+    n_responden_24 = sum(n_responden_24),
+    perc_responden_24 = (n_responden_24 / n_vivos) * 100
+  )
+
+# 3. Formateamos para que quede igual a tu pedido: "n (%)"
+Tabla_Manuscrito <- bind_rows(Tabla_Final, Total_Fila) %>%
+  mutate(
+    `Ingieren n` = n_ingieren,
+    `Adquisición n (%)` = paste0(n_adquisicion, " (", round(perc_adquisicion, 1), "%)"),
+    `Mueren n (%)` = paste0(n_mueren, " (", round(perc_mueren, 1), "%)"),
+    `Responden 24h n (%)` = paste0(n_responden_24, " (", round(perc_responden_24, 1), "%)")
+  ) %>%
+  select(Tratamiento, `Ingieren n`, `Adquisición n (%)`, `Mueren n (%)`, `Responden 24h n (%)`)
+
+# 4. Imprimir resultado
+print(Tabla_Manuscrito)
 
                                     ##MODELO
 Datos$A <- as.numeric(Datos$A)
@@ -244,131 +296,44 @@ modelo_global <- glm(Generaliza ~ 1, family = binomial, data = Datos_bin)
 em_global <- emmeans(modelo_global, ~ 1, type = "response")
 em_global
 
- #### Calculo da tasa de "mentirosos" estimada #### Intento de GEMINI 
-
-# --- 1. PREPARACIÓN ---
-library(boot)
-library(dplyr)
-
-# Aseguramos que no haya NAs en las variables críticas para que no falle el cálculo
-Datos_Clean <- Datos %>% 
-  filter(!is.na(A) & !is.na(Recuerda))
-
-# --- 2. DEFINICIÓN DE LA FUNCIÓN ESTADÍSTICA ---
-# Esta función calcula el % de aprendices ocultos basándose en tu lógica:
-# (Gente que no expresó pero recordó) / (Tasa de retención de los que sí expresaron)
-
-calc_aprendices_ocultos <- function(data, indices) {
-  # 'indices' permite al boot generar las muestras aleatorias
-  d <- data[indices, ] 
-  
-  # A. Calcular Tasa de Retención en el grupo que SÍ expresó aprendizaje (A=1)
-  # ¿Cuántos de los que tuvieron A=1 lograron recordar?
-  grupo_expresa <- d[d$A == 1, ]
-  
-  # Evitamos error si en una muestra aleatoria no sale nadie con A=1
-  if(nrow(grupo_expresa) == 0) return(NA) 
-  
-  tasa_retencion <- mean(grupo_expresa$Recuerda)
-  
-  # Si la tasa es 0 (nadie recordó), no podemos dividir. Devolvemos NA.
-  if(tasa_retencion == 0) return(NA)
-  
-  # B. Contar los "Mentirosos Evidentes" (A=0 pero Recuerda=1)
-  # Estos son los que sabemos seguro que aprendieron pero no lo mostraron
-  mentirosos_observados <- sum(d$A == 0 & d$Recuerda == 1)
-  
-  # C. Extrapolación (Tu razonamiento lógico)
-  # Si solo vimos a los que recordaron, pero hubo otros que aprendieron, no mostraron y olvidaron:
-  total_mentirosos_est <- mentirosos_observados / tasa_retencion
-  
-  # D. Calcular el porcentaje sobre el TOTAL de abejorros
-  # (Total estimados / Total de individuos n) * 100
-  porcentaje_final <- (total_mentirosos_est / nrow(d)) * 100
-  
-  return(porcentaje_final)
-}
-
-# --- 3. EJECUCIÓN DEL BOOTSTRAP ---
-# R = 2000 es un buen número estándar para publicaciones (puedes subir a 10000 si quieres más precisión)
-set.seed(123) # Para que el resultado sea reproducible
-resultados_boot <- boot(data = Datos_Clean, statistic = calc_aprendices_ocultos, R = 2000)
-
-# --- 4. RESULTADOS E INTERVALOS ---
-print(resultados_boot)
-
-# Calculamos el intervalo de confianza (Recomendado: BCa o Percentil)
-intervalo <- boot.ci(resultados_boot, type = c("perc", "bca"))
-
-print(intervalo)
-
-# --- 5. VISUALIZACIÓN RÁPIDA (Opcional) ---
-hist(resultados_boot$t, breaks = 30, col = "lightblue", main = "Distribución del % de Aprendices Ocultos", xlab = "% Estimado")
-abline(v = resultados_boot$t0, col = "red", lwd = 2) # Tu estimación original
-
-#### Lo mismo pero ahora separando por tratamiento a compara los resultados obtenidos###
+ #### Calculo da tasa de "mentirosos" estimada #### 
 # 1. FILTRADO INICIAL
 # Quitamos "SIN OLOR" porque ahí la falta de respuesta es real, no latente.
 # También aseguramos que no haya NAs.
 Datos_Analisis <- Datos %>%
   filter(Tratamiento != "SIN OLOR") %>%
+  filter(Ingestas>0) %>%
+  filter(Muere==0) %>%
   filter(!is.na(A) & !is.na(Recuerda)) %>%
   droplevels() # Elimina el nivel "SIN OLOR" de la lista de factores
 
 # 2. FUNCIÓN DE BOOTSTRAP (La misma lógica, adaptada para errores)
 calc_latentes <- function(data, indices) {
   d <- data[indices, ]
-  
-  # Grupo que EXPRESA (A=1)
-  grupo_expresa <- d[d$A == 1, ]
-  
-  # Si en esta simulación aleatoria nadie aprendió (pasa en grupos pequeños), devolvemos NA
+  grupo_expresa <- d[d$A == 1, ]  # Grupo que EXPRESA (A=1)
   if(nrow(grupo_expresa) == 0) return(NA)
-  
-  # Tasa de Retención del grupo visible
-  tasa_retencion <- mean(grupo_expresa$Recuerda)
-  
-  # Si la retención es 0 (nadie recordó), no podemos extrapolar (división por 0)
+  tasa_retencion <- mean(grupo_expresa$Recuerda) # Tasa de Retención del grupo visible
   if(tasa_retencion == 0) return(NA)
-  
-  # Conteo de latentes observados (A=0, R=1)
-  latentes_obs <- sum(d$A == 0 & d$Recuerda == 1)
-  
-  # Estimación Total Latentes = Observados / Tasa
-  total_latentes_est <- latentes_obs / tasa_retencion
-  
-  # Devolver % respecto al total del grupo
-  return((total_latentes_est / nrow(d)) * 100)
+  latentes_obs <- sum(d$A == 0 & d$Recuerda == 1) # Conteo de latentes observados (A=0, R=1)
+  total_latentes_est <- latentes_obs / tasa_retencion   # Estimación Total Latentes = Observados / Tasa
+  return((total_latentes_est / nrow(d)) * 100) #Calculo %
 }
 
 # 3. BUCLE PARA CALCULAR POR TRATAMIENTO
 # Creamos una lista vacía para guardar resultados
 resultados_lista <- list()
 tratamientos_validos <- levels(Datos_Analisis$Tratamiento)
-
-print("Iniciando cálculos por tratamiento (esto puede tardar unos segundos)...")
-
 for(trato in tratamientos_validos) {
-  
-  # Tomamos solo los datos de ESTE tratamiento
   subset_datos <- Datos_Analisis %>% filter(Tratamiento == trato)
-  
-  # Verificación de seguridad: Si hay muy pocos datos (ej. <10 abejas), saltamos
-  if(nrow(subset_datos) < 10) {
-    next
-  }
   
   # Ejecutamos Bootstrap (2000 iteraciones)
   set.seed(123)
   boot_res <- boot(data = subset_datos, statistic = calc_latentes, R = 2000)
   
-  # Calculamos Intervalo de Confianza (BCa es el mejor, si falla usa Percentil)
-  # A veces BCa falla si hay poca varianza, usamos tryCatch para evitar errores
   ci <- tryCatch({
     boot.ci(boot_res, type = "bca")$bca[4:5]
   }, error = function(e) {
-    # Si falla BCa, usamos percentil simple
-    boot.ci(boot_res, type = "perc")$percent[4:5]
+    boot.ci(boot_res, type = "perc")$percent[4:5] # Si falla BCa, usa percentil simple
   })
   
   # Guardamos en la lista
@@ -384,20 +349,71 @@ for(trato in tratamientos_validos) {
 
 # 4. TABLA FINAL
 Tabla_Resultados <- bind_rows(resultados_lista)
-
-# Redondeamos para que se vea bonito
+# Redondeo
 Tabla_Resultados <- Tabla_Resultados %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # 5. VER RESULTADOS
-print(Tabla_Resultados)
+print(Tabla_Resultados) # aca son los n con al menos una ingestas y descartando los que murieron en el procedimiento
 
-# Opcional: Graficar para el paper
-library(ggplot2)
-ggplot(Tabla_Resultados, aes(x = Tratamiento, y = Porcentaje_Estimado)) +
-  geom_bar(stat = "identity", fill = "skyblue", alpha = 0.7) +
-  geom_errorbar(aes(ymin = IC_Inferior, ymax = IC_Superior), width = 0.2) +
-  labs(y = "% Estimado de Aprendices Latentes (No expresan)", 
-       title = "Estimación de Aprendizaje No Expresado por Tratamiento") +
-  theme_minimal()
+# #Contrastes
+# 1. Definimos los valores del Control (Fila 1 de tu Tabla_Resultados)
+# Usamos N=59 y Porcentaje=24.72
+n_cont_limpio <- 59
+perc_cont_limpio <- 24.72
+mentirosos_cont_limpio <- (perc_cont_limpio * n_cont_limpio) / 100
 
+# 2. Función de contraste adaptada a los porcentajes
+contraste_final <- function(n_trato, perc_trato, n_cont, ment_cont) {
+  # Calculamos cuántos individuos representan ese porcentaje
+  ment_trato <- (perc_trato * n_trato) / 100
+  
+  matriz <- matrix(c(ment_trato, (n_trato - ment_trato),
+                     ment_cont, (n_cont - ment_cont)), 
+                   nrow = 2, byrow = TRUE)
+  
+  # Usamos prop.test para obtener el p-valor
+  return(prop.test(matriz)$p.value)
+}
+
+# 3. Aplicamos a la Tabla_Resultados
+# Usamos N_Total y Porcentaje_Estimado que son los nombres que tenés
+Tabla_Contrastes_Limpia <- Tabla_Resultados %>%
+  filter(Tratamiento != "Control") %>% # Filtramos el control para no compararlo consigo mismo
+  rowwise() %>%
+  mutate(p_valor = contraste_final(N_Total, Porcentaje_Estimado, n_cont_limpio, mentirosos_cont_limpio)) %>%
+  ungroup() %>%
+  mutate(Significancia = ifelse(p_valor < 0.05, "*", "n.s."))
+
+# 4. Ver los resultados
+print(Tabla_Contrastes_Limpia)
+
+
+# 1. Función usando Fisher Exact Test
+contraste_fisher <- function(n_trato, perc_trato, n_cont, perc_cont) {
+  # Reconstruimos la matriz de contingencia [Éxitos, Fracasos]
+  exitos_trato <- round((perc_trato * n_trato) / 100)
+  exitos_cont <- round((perc_cont * n_cont) / 100)
+  
+  matriz <- matrix(c(exitos_trato, (n_trato - exitos_trato),
+                     exitos_cont, (n_cont - exitos_cont)), 
+                   nrow = 2, byrow = TRUE)
+  
+  # Ejecutamos Fisher (test de dos colas)
+  return(fisher.test(matriz)$p.value)
+}
+
+# 2. Aplicamos a la Tabla_Resultados (limpia)
+# Asegúrate de que el control se llame exactamente "Control" o "SIN CNA" según tu tabla
+Tabla_Fisher <- Tabla_Resultados %>%
+  filter(Tratamiento != "Control") %>% 
+  rowwise() %>%
+  mutate(p_valor_fisher = contraste_fisher(N_Total, Porcentaje_Estimado, 59, 24.72)) %>%
+  ungroup() %>%
+  mutate(Significancia = case_when(
+    p_valor_fisher < 0.05 ~ "*",
+    p_valor_fisher < 0.1 ~ ".", # Tendencia marginal
+    TRUE ~ "n.s."
+  ))
+
+print(Tabla_Fisher[, c("Tratamiento", "N_Total", "Porcentaje_Estimado", "p_valor_fisher", "Significancia")])
